@@ -1,0 +1,15 @@
+C:\Users\NWHAL\Hephaestus\InternalGeometry\InternalGeometry\bin\Debug\net8.0\InternalGeometry.exe
+C:\Users\NWHAL\Hephaestus\InternalGeometry\InternalGeometry\bin\Debug\net8.0\InternalGeometry.deps.json
+C:\Users\NWHAL\Hephaestus\InternalGeometry\InternalGeometry\bin\Debug\net8.0\InternalGeometry.runtimeconfig.json
+C:\Users\NWHAL\Hephaestus\InternalGeometry\InternalGeometry\bin\Debug\net8.0\InternalGeometry.dll
+C:\Users\NWHAL\Hephaestus\InternalGeometry\InternalGeometry\bin\Debug\net8.0\InternalGeometry.pdb
+C:\Users\NWHAL\Hephaestus\InternalGeometry\InternalGeometry\obj\Debug\net8.0\InternalGeometry.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\NWHAL\Hephaestus\InternalGeometry\InternalGeometry\obj\Debug\net8.0\InternalGeometry.AssemblyInfoInputs.cache
+C:\Users\NWHAL\Hephaestus\InternalGeometry\InternalGeometry\obj\Debug\net8.0\InternalGeometry.AssemblyInfo.cs
+C:\Users\NWHAL\Hephaestus\InternalGeometry\InternalGeometry\obj\Debug\net8.0\InternalGeometry.csproj.CoreCompileInputs.cache
+C:\Users\NWHAL\Hephaestus\InternalGeometry\InternalGeometry\obj\Debug\net8.0\InternalGeometry.sourcelink.json
+C:\Users\NWHAL\Hephaestus\InternalGeometry\InternalGeometry\obj\Debug\net8.0\InternalGeometry.dll
+C:\Users\NWHAL\Hephaestus\InternalGeometry\InternalGeometry\obj\Debug\net8.0\refint\InternalGeometry.dll
+C:\Users\NWHAL\Hephaestus\InternalGeometry\InternalGeometry\obj\Debug\net8.0\InternalGeometry.pdb
+C:\Users\NWHAL\Hephaestus\InternalGeometry\InternalGeometry\obj\Debug\net8.0\InternalGeometry.genruntimeconfig.cache
+C:\Users\NWHAL\Hephaestus\InternalGeometry\InternalGeometry\obj\Debug\net8.0\ref\InternalGeometry.dll
