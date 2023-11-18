@@ -20,7 +20,7 @@ public class Point
     private double x;
     private double y;
     private double z;
-    private double limit = 100;
+    private readonly double limit = 100;
 
     public Point(double x, double y, double z)
     {
@@ -46,26 +46,26 @@ public class Point
 }
 
 
-public class Segment
+public abstract class Segment
 {
     protected Point a;
     protected Point b;
     protected Point[]? c;
 
-    public Segment(Point a, Point b, Point[]? c = null)
+    protected Segment(Point a, Point b, Point[]? c = null)
     {
         this.a = a;
         this.b = b;
         this.c = c;
     }
 
-    public void setEndpoints(Point a, Point b)
+    protected void setEndpoints(Point a, Point b)
     {
         this.a = a;
         this.b = b;
     }
 
-    public Point[] getendPoints()
+    protected Point[] getendPoints()
     {
         return [a, b];
     }
@@ -82,7 +82,7 @@ public class Segment
         return new Point((p1Coords[0] + p2Coords[0])/2, (p1Coords[1] + p2Coords[1])/2, (p1Coords[2] + p2Coords[2])/2);
     }
 
-    public double getLength()
+    protected double getLength()
     {
         return vectorDistance(a, b);
     }
@@ -110,7 +110,7 @@ public class Spline : Segment
     }
 
     public Point[] getCurvepoints() {
-        return c;
+        return c!;
     }
 
     public new double getLength() {
@@ -124,7 +124,7 @@ public class Arc : Segment
     private double angle;
     private double width;
     private double height;
-    private Point widthCentre;
+    private Point? widthCentre;
 
     public Arc(Point a, Point b, Point c) : base(a, b, [c])
     {
@@ -132,28 +132,32 @@ public class Arc : Segment
         this.b = b; // endpoint 2
         this.c = [c]; // midpoint
 
-        width = vectorDistance(a, b); // necessary?
-        widthCentre = segCentre(a, b);
-        height = vectorDistance(widthCentre, c);
+        recalculateGeometry();
+    }
+
+    private void recalculateGeometry() {
+        this.width = vectorDistance(a, b); // necessary?
+        this.widthCentre = segCentre(a, b);
+        this.height = vectorDistance(widthCentre, c![0]);
 
         // radius = height/2 + (width^2 / 8*height)
-        this.radius = (height / 2) + (Math.Pow(width, 2) / (8*height));
+        this.radius = (height / 2) + (Math.Pow(width, 2) / (8 * height));
 
         // cos(C) = (a^2 + b^2 - c^2) / (2ab)
         // a = b = radius
         // c = width
-        this.angle = Math.Acos((Math.Pow(this.radius, 2) + Math.Pow(this.radius, 2) - Math.Pow(width, 2)) / 2*Math.Pow(this.radius, 2));
-
+        this.angle = Math.Acos((Math.Pow(this.radius, 2) + Math.Pow(this.radius, 2) - Math.Pow(width, 2)) / 2 * Math.Pow(this.radius, 2));
     }
 
     public void setCurvepoint(Point c)
     {
         this.c = [c];
+        recalculateGeometry();
     }
 
-    public Point[] getCurvepoint()
+    public Point getCurvepoint()
     {
-        return c;
+        return this.c![0];
     }
 
     public new double getLength()
@@ -170,4 +174,45 @@ public class Arc : Segment
     {
         return this.angle;
     }
+}
+
+public abstract class Shape
+{
+    protected Point origin;
+    protected Segment[] segments = [];
+    protected Point[] points = [];  // right now setting up for instantation either via points or segments -- should decide on one or the other eventually
+
+    public Shape(Point origin, Segment[] segments) {
+        this.origin = origin;
+        this.segments = segments;
+    }
+
+    public Shape(Point origin, Point[] points)
+    {
+        this.origin = origin;
+        this.points = points;
+    }
+
+}
+
+public class Polygon : Shape {
+
+    // LEARN: segments is <Segment> in base class but is passed as <Line> to Polygon constructor
+    // which obj methods are available? Segment or Line?
+
+    public Polygon(Point origin, Line[] segments) : base(origin, segments){
+        this.origin = origin;
+        this.segments = segments;
+        // TODO: generate Point[] from line endpoints
+    }
+
+    public Polygon(Point origin, Point[] points) : base(origin, points)
+    {
+        this.origin = origin;
+        this.points = points;
+        // TODO: generate Line[] from Point[]
+        // TODO: need code to check if valid polygon (no intersecting lines)
+        // if intersecting lines, create multiple Polygons sharing vertices
+    }
+
 }
