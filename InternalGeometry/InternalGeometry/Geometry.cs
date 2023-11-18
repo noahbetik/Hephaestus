@@ -70,11 +70,21 @@ public class Segment
         return [a, b];
     }
 
+    protected double vectorDistance(Point p1, Point p2) {
+        double[] p1Coords = p1.getCoords();
+        double[] p2Coords = p2.getCoords();
+        return Math.Sqrt(Math.Pow(p2Coords[0] - p1Coords[0], 2) + Math.Pow(p2Coords[1] - p1Coords[1], 2) + Math.Pow(p2Coords[2] - p1Coords[2], 2));
+    }
+
+    protected Point segCentre(Point p1, Point p2) {
+        double[] p1Coords = p1.getCoords();
+        double[] p2Coords = p2.getCoords();
+        return new Point((p1Coords[0] + p2Coords[0])/2, (p1Coords[1] + p2Coords[1])/2, (p1Coords[2] + p2Coords[2])/2);
+    }
+
     public double getLength()
     {
-        double[] aCoords = a.getCoords();
-        double[] bCoords = b.getCoords();
-        return Math.Sqrt(Math.Pow(bCoords[0] - aCoords[0], 2) + Math.Pow(bCoords[1] - aCoords[1], 2) + Math.Pow(bCoords[2] - aCoords[2], 2));
+        return vectorDistance(a, b);
     }
 
 }
@@ -110,10 +120,30 @@ public class Spline : Segment
 
 public class Arc : Segment
 {
+    private double radius;
+    private double angle;
+    private double width;
+    private double height;
+    private Point widthCentre;
+
     public Arc(Point a, Point b, Point c) : base(a, b, [c])
     {
-        this.a = a;
-        this.b = b;
+        this.a = a; // endpoint 1
+        this.b = b; // endpoint 2
+        this.c = [c]; // midpoint
+
+        width = vectorDistance(a, b); // necessary?
+        widthCentre = segCentre(a, b);
+        height = vectorDistance(widthCentre, c);
+
+        // radius = height/2 + (width^2 / 8*height)
+        this.radius = (height / 2) + (Math.Pow(width, 2) / (8*height));
+
+        // cos(C) = (a^2 + b^2 - c^2) / (2ab)
+        // a = b = radius
+        // c = width
+        this.angle = Math.Acos((Math.Pow(this.radius, 2) + Math.Pow(this.radius, 2) - Math.Pow(width, 2)) / 2*Math.Pow(this.radius, 2));
+
     }
 
     public void setCurvepoint(Point c)
@@ -128,16 +158,16 @@ public class Arc : Segment
 
     public new double getLength()
     {
-        return 0; // MATH??
+        return this.radius * this.angle;
     }
 
     public double getRadius()
     {
-        return 0; // MATH??
+        return this.radius;
     }
 
     public double getAngle()
     {
-        return 0; // MATH??
+        return this.angle;
     }
 }
