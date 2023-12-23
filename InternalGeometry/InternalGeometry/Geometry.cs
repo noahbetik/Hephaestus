@@ -65,31 +65,34 @@ public abstract class Segment
         this.b = b;
     }
 
-    protected Point[] getendPoints()
+    public Point[] getEndpoints()
     {
         return [a, b];
     }
 
-    protected double vectorDistance(Point p1, Point p2) {
+    protected double vectorDistance(Point p1, Point p2)
+    {
         double[] p1Coords = p1.getCoords();
         double[] p2Coords = p2.getCoords();
         return Math.Sqrt(Math.Pow(p2Coords[0] - p1Coords[0], 2) + Math.Pow(p2Coords[1] - p1Coords[1], 2) + Math.Pow(p2Coords[2] - p1Coords[2], 2));
     }
 
-    protected Point segCentre(Point p1, Point p2) {
+    protected Point segCentre(Point p1, Point p2)
+    {
         double[] p1Coords = p1.getCoords();
         double[] p2Coords = p2.getCoords();
-        return new Point((p1Coords[0] + p2Coords[0])/2, (p1Coords[1] + p2Coords[1])/2, (p1Coords[2] + p2Coords[2])/2);
+        return new Point((p1Coords[0] + p2Coords[0]) / 2, (p1Coords[1] + p2Coords[1]) / 2, (p1Coords[2] + p2Coords[2]) / 2);
     }
 
-    protected double getLength()
+    public double getLength()
     {
         return vectorDistance(a, b);
     }
 
 }
 
-public class Line : Segment {
+public class Line : Segment
+{
     public Line(Point a, Point b) : base(a, b, null)
     {
         this.a = a;
@@ -105,15 +108,18 @@ public class Spline : Segment
         this.b = b;
     }
 
-    public void setCurvepoints(Point[] c) {
+    public void setCurvepoints(Point[] c)
+    {
         this.c = c;
     }
 
-    public Point[] getCurvepoints() {
+    public Point[] getCurvepoints()
+    {
         return c!;
     }
 
-    public new double getLength() {
+    public new double getLength()
+    {
         return 0; // MATH??
     }
 }
@@ -135,7 +141,8 @@ public class Arc : Segment
         recalculateGeometry();
     }
 
-    private void recalculateGeometry() {
+    private void recalculateGeometry()
+    {
         this.width = vectorDistance(a, b); // necessary?
         this.widthCentre = segCentre(a, b);
         this.height = vectorDistance(widthCentre, c![0]);
@@ -179,40 +186,93 @@ public class Arc : Segment
 public abstract class Shape
 {
     protected Point origin;
-    protected Segment[] segments = [];
-    protected Point[] points = [];  // right now setting up for instantation either via points or segments -- should decide on one or the other eventually
+    protected List<Segment> segments = new List<Segment>();
+    protected List<Point> points = new List<Point>();  // right now setting up for instantation either via points or segments -- should decide on one or the other eventually
 
-    public Shape(Point origin, Segment[] segments) {
+    public Shape(Point origin, Segment[] segments)
+    {
         this.origin = origin;
-        this.segments = segments;
+        this.segments = segments.ToList();
     }
 
     public Shape(Point origin, Point[] points)
     {
         this.origin = origin;
-        this.points = points;
+        this.points = points.ToList();
     }
 
 }
 
-public class Polygon : Shape {
-
-    // LEARN: segments is <Segment> in base class but is passed as <Line> to Polygon constructor
-    // which obj methods are available? Segment or Line?
-
-    public Polygon(Point origin, Line[] segments) : base(origin, segments){
+public class Polygon : Shape
+{
+    public Polygon(Point origin, Segment[] segments) : base(origin, segments)
+    {
         this.origin = origin;
-        this.segments = segments;
-        // TODO: generate Point[] from line endpoints
+        this.segments = segments.ToList();
+
+        foreach (Segment sgmt in this.segments)
+        {
+            Point[] pt = sgmt.getEndpoints();
+            foreach (Point p in pt)
+            {
+                if (!this.points.Contains(p))
+                { // LEARN: C# pass by ref or pass by value? -- worth to check coord values regardless? -- TEST
+                    this.points.Add(p);
+                }
+            }
+        }
     }
 
     public Polygon(Point origin, Point[] points) : base(origin, points)
     {
         this.origin = origin;
-        this.points = points;
+        this.points = points.ToList();
         // TODO: generate Line[] from Point[]
         // TODO: need code to check if valid polygon (no intersecting lines)
-        // if intersecting lines, create multiple Polygons sharing vertices
+        // if intersecting lines, create extra point for shared vertex
+        // do we want functionality to split intersected polygons in to separate ones?
+
+        Point startPoint;
+        Point endPoint;
+        Segment localSeg;
+
+        for (int i=0; i<this.points.Count-1; i++)
+        { // connect points in given order
+            startPoint = this.points[i];
+            endPoint = this.points[i+1];
+            localSeg = new Line(startPoint, endPoint);
+            this.segments.Add(localSeg);
+        }
+
+        // connect last point with first point
+        startPoint = this.points[this.points.Count-1];
+        endPoint = this.points[0];
+        localSeg = new Line(startPoint, endPoint);
+        this.segments.Add(localSeg);
+
+        // Bentley-Ottman algorithm s
+
+
+    }
+
+    public void setOrigin(Point newOrigin)
+    {
+        this.origin = newOrigin;
+    }
+
+    public Point getOrigin()
+    {
+        return this.origin;
+    }
+
+    public List<Segment> getSegments()
+    {
+        return this.segments;
+    }
+
+    public List<Point> getPoints()
+    {
+        return this.points;
     }
 
 }

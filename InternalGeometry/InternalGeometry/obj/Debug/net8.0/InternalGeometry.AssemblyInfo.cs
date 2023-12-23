@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("InternalGeometry")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+25da16eea8ceadbae8487245f5b82795a4e6a759")]
 [assembly: System.Reflection.AssemblyProductAttribute("InternalGeometry")]
 [assembly: System.Reflection.AssemblyTitleAttribute("InternalGeometry")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
