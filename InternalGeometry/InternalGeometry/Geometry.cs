@@ -250,8 +250,7 @@ public class Polygon : Shape
         localSeg = new Line(startPoint, endPoint);
         this.segments.Add(localSeg);
 
-        // Bentley-Ottman algorithm s
-
+        // intersection checking
 
     }
 
