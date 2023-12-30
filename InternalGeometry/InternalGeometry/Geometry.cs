@@ -201,6 +201,16 @@ public abstract class Shape
         this.points = points.ToList();
     }
 
+    public void setOrigin(Point newOrigin)
+    {
+        this.origin = newOrigin;
+    }
+
+    public Point getOrigin()
+    {
+        return this.origin;
+    }
+
 }
 
 public class Polygon : Shape
@@ -236,16 +246,16 @@ public class Polygon : Shape
         Point endPoint;
         Segment localSeg;
 
-        for (int i=0; i<this.points.Count-1; i++)
+        for (int i = 0; i < this.points.Count - 1; i++)
         { // connect points in given order
             startPoint = this.points[i];
-            endPoint = this.points[i+1];
+            endPoint = this.points[i + 1];
             localSeg = new Line(startPoint, endPoint);
             this.segments.Add(localSeg);
         }
 
         // connect last point with first point
-        startPoint = this.points[this.points.Count-1];
+        startPoint = this.points[this.points.Count - 1];
         endPoint = this.points[0];
         localSeg = new Line(startPoint, endPoint);
         this.segments.Add(localSeg);
@@ -254,15 +264,6 @@ public class Polygon : Shape
 
     }
 
-    public void setOrigin(Point newOrigin)
-    {
-        this.origin = newOrigin;
-    }
-
-    public Point getOrigin()
-    {
-        return this.origin;
-    }
 
     public List<Segment> getSegments()
     {
@@ -272,6 +273,63 @@ public class Polygon : Shape
     public List<Point> getPoints()
     {
         return this.points;
+    }
+
+}
+
+public abstract class Volume
+{
+    protected Point origin; // geomtric centre of base
+    protected Shape base2d;
+    protected Segment path;  // sweep path -- simple for extrusion, not sure how to handle revolution yet
+    // TODO SILVER: deformations
+
+    public Volume(Shape base2d, Segment path)
+    {
+        this.base2d = base2d;
+        this.path = path;
+        this.origin = base2d.getOrigin();
+    }
+
+    public void setOrigin(Point newOrigin)
+    {
+        this.origin = newOrigin;
+    }
+
+    public void setBase2d(Shape base2d)
+    {
+        this.base2d = base2d;
+    }
+
+    public void setPath(Segment path)
+    {
+        this.path = path;
+    }
+
+    public Point getOrigin()
+    {
+        return this.origin;
+    }
+
+    public Shape getBase2d()
+    {
+        return this.base2d;
+    }
+
+    public Segment getPath()
+    {
+        return this.path;
+    }
+
+}
+
+public class Extrusion : Volume
+{
+    public Extrusion(Shape base2d, Segment path) : base(base2d, path)
+    {
+        this.base2d = base2d;
+        this.path = path;
+        this.origin = base2d.getOrigin();
     }
 
 }
