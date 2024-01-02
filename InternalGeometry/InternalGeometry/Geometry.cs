@@ -1,7 +1,12 @@
 ﻿// See https://aka.ms/new-console-template for more information
 using System.Collections.Generic;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
 
 Console.WriteLine("Hello, World! we r unga bunga ing");
+
+
 
 Point testpoint = new Point(2.54, 9.71, 16.78);
 
@@ -13,6 +18,35 @@ Spline testSpline = new Spline(p1, p2, [p3]);
 
 double[] coords = testpoint.getCoords();
 Console.WriteLine("New point object: {0}, {1}, {2}", coords[0], coords[1], coords[2]);
+
+IPHostEntry ipHostInfo = await Dns.GetHostEntryAsync("localhost"); // get IP addresses
+IPAddress ipAddress = ipHostInfo.AddressList[1]; // [1] is IPv4 addr from python server
+IPEndPoint ipEndPoint = new(ipAddress, 444); // create endpoint with IP addr and port
+
+using Socket client = new(ipEndPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp); // create socket client
+
+await client.ConnectAsync(ipEndPoint); // wait for connection
+
+while (true) // wait for message from Python-side TCP server
+{
+    /*// Send message.
+    var message = "Hi friends 👋!<|EOM|>";
+    var messageBytes = Encoding.UTF8.GetBytes(message);
+    _ = await client.SendAsync(messageBytes, SocketFlags.None);
+    Console.WriteLine($"Socket client sent message: \"{message}\"");*/
+
+    var buffer = new byte[1024]; // read buffer
+    var received = await client.ReceiveAsync(buffer, SocketFlags.None); // wait for message
+    var msg = Encoding.UTF8.GetString(buffer, 0, received);
+    Console.WriteLine($"Socket client received message: \"{msg}\"");
+    if (msg == "end")
+    {
+        break;
+    }
+
+}
+
+client.Shutdown(SocketShutdown.Both);
 
 
 public class Point
