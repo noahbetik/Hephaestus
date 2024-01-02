@@ -4,7 +4,7 @@ import socket as s
 
 def startServer():
     serverSocket = s.socket(s.AF_INET, s.SOCK_STREAM)
-    serverAddr = ('localhost', 444) # (IP addr, port)
+    serverAddr = ('0.0.0.0', 444) # (IP addr, port)
     serverSocket.bind(serverAddr)
     serverSocket.listen(1) # max number of queued connections
 
