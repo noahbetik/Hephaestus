@@ -18,7 +18,7 @@ while cap.isOpened():
     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
     # Process the frame for hand detection
-    results = hands.process(frame_rgb)
+    results = hands.process(frame_rgb) 
 
     # Draw the hand annotations on the frame
     if results.multi_hand_landmarks:

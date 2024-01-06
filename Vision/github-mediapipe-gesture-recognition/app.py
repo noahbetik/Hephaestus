@@ -15,6 +15,8 @@ from utils import CvFpsCalc
 from model import KeyPointClassifier
 from model import PointHistoryClassifier
 
+import os
+print("Current Working Directory:", os.getcwd())
 
 def get_args():
     parser = argparse.ArgumentParser()
