@@ -55,7 +55,11 @@ def main():
     use_brect = True
 
     # Camera preparation ###############################################################
-    cap = cv.VideoCapture(cap_device)
+    # cap = cv.VideoCapture(cap_device)
+    # Replace with the same PORT used in the ffmpeg command
+    stream_url = 'udp://@:444'
+
+    cap = cv.VideoCapture(stream_url)  
     cap.set(cv.CAP_PROP_FRAME_WIDTH, cap_width)
     cap.set(cv.CAP_PROP_FRAME_HEIGHT, cap_height)
 
@@ -114,7 +118,7 @@ def main():
         ret, image = cap.read()
         if not ret:
             break
-        image = cv.flip(image, 1)  # Mirror display
+        image = cv.flip(image, -1)  # Mirror display
         debug_image = copy.deepcopy(image)
 
         # Detection implementation #############################################################
