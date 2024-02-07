@@ -56,3 +56,14 @@ while True:
 cap.release()
 cv2.destroyAllWindows()
 GPIO.cleanup()
+
+
+/home/capstone/RaspberryPi/Multi_Camera_Adapter/Multi_Adapter_Board_2Channel_uc444/multicam.py:8: RuntimeWarning: This channel is already in use, continuing anyway.  Use GPIO.setwarnings(False) to disable warnings.
+  GPIO.setup(4, GPIO.OUT)
+/home/capstone/RaspberryPi/Multi_Camera_Adapter/Multi_Adapter_Board_2Channel_uc444/multicam.py:9: RuntimeWarning: This channel is already in use, continuing anyway.  Use GPIO.setwarnings(False) to disable warnings.
+  GPIO.setup(17, GPIO.OUT)
+[ WARN:0@0.430] global ./modules/videoio/src/cap_gstreamer.cpp (2401) handleMessage OpenCV | GStreamer warning: Embedded video playback halted; module v4l2src0 reported: Failed to allocate required memory.
+[ WARN:0@0.431] global ./modules/videoio/src/cap_gstreamer.cpp (1356) open OpenCV | GStreamer warning: unable to start pipeline
+[ WARN:0@0.431] global ./modules/videoio/src/cap_gstreamer.cpp (862) isPipelinePlaying OpenCV | GStreamer warning: GStreamer: pipeline have not been created
+Can't receive frame (stream end?). Exiting ...
+
