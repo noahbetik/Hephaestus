@@ -10,6 +10,8 @@
 /Hephaestus/[Ll]ogs/
 /Hephaestus/[Uu]ser[Ss]ettings/
 
+/HephaestusUI/HephaestusUI/env/
+
 # MemoryCaptures can get excessive in size.
 # They also could contain extremely sensitive data
 /Hephaestus/[Mm]emoryCaptures/
