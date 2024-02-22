@@ -99,7 +99,7 @@ def closeClient(sock):
 
 def parseCommand(command, view_control, camera_parameters, vis, geometry_dir):
     # FORMAT:
-    # [TYPE] [SUBTYPE] [(COORDS)]* [ID]* [(DIMENSIONS)]*
+    # [TYPE] [SUBTYPE] [(COORDS1)]* [(COORDS2)]* [ID]* [(DIMENSIONS)]*
     # * -- optional
     # eg1 "cam rotate (20,0,-50)" -- rotate camera 20deg about x-axis and -50deg about z-axis
     # eg2 "create box (1,2,3) (0.4,0.8,0.4) -- create new box mesh at (1, 2, 3) with dimensions 0.4*0.8*0.4
@@ -162,8 +162,10 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, geometry_dir)
             # Set back the stored view matrix
             camera_parameters.extrinsic = current_view_matrix
             view_control.convert_from_pinhole_camera_parameters(camera_parameters, True)
-        # case "line": # line handling not implemented yet
-        #     print("Creating new line with endpoints ___ and ___")
+        case "line": # line handling not implemented yet
+            print("Creating new line with endpoints ___ and ___")
+            points = np.array([[0,0,0], [0.1, 0.1, 0.1]])
+            lines = np.array([[0, 1]])
         # case "point": # is point handling useful on its own?
         #     print("Creating new point at ___")
 
