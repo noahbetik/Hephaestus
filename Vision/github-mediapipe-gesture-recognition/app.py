@@ -10,8 +10,6 @@ from collections import deque
 from datetime import datetime
 import time
 import sys
-
-
 import cv2 as cv
 import numpy as np
 import mediapipe as mp
@@ -19,8 +17,12 @@ import mediapipe as mp
 from utils import CvFpsCalc
 from model import KeyPointClassifier
 from model import PointHistoryClassifier
+from tcp.tcp_send import TCPClient
+
 
 import os
+
+import socket
 
 print("Current Working Directory:", os.getcwd())
 
@@ -64,6 +66,12 @@ def main():
     min_tracking_confidence = args.min_tracking_confidence
 
     use_brect = True
+
+    # Initialize and connect the TCP client
+    tcp_client = TCPClient(
+        host="127.0.0.1", port=65433
+    )  # Adjust host and port if needed
+    tcp_client.connect()
 
     # Camera preparation ###############################################################
     cap = cv.VideoCapture(cap_device)
@@ -118,7 +126,7 @@ def main():
 
     gesture_counter = 0
     gesture_lock_threshold = 30  # Number of frames to confirm gesture lock
-    gesture_confidence_threshold = 0.65
+    gesture_confidence_threshold = 0.65  # Confidence level to be valid
     locked_in = False
     previous_hand_sign_id = None
     hand_sign_name = "No Gesture"
@@ -200,11 +208,12 @@ def main():
                             # or gesture_duration >= gesture_lock_duration
                         ):
                             if not locked_in:
-                                print(f"\nGesture: {hand_sign_name} locked in")
-                                print(
-                                    f"Ready to send data for gesture: {hand_sign_name}"
-                                )
                                 locked_in = True
+                                print(f"\nGesture: {hand_sign_name} locked in")
+                                tcp_client.send_gesture(hand_sign_name)
+                                print(
+                                    f"Sent locked in confirmation for gesture: {hand_sign_name}"
+                                )
                     else:
                         # If a different gesture is detected, print a reset message and clear the line
                         if gesture_counter > 0:
@@ -292,6 +301,7 @@ def main():
         # Screen reflection #############################################################
         cv.imshow("Hand Gesture Recognition", debug_image)
 
+    tcp_client.close()
     cap.release()
     cv.destroyAllWindows()
 
