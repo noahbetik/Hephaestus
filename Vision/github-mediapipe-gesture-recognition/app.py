@@ -117,12 +117,11 @@ def main():
     mode = 0
 
     gesture_counter = 0
-    gesture_start_time = None
     gesture_lock_threshold = 30  # Number of frames to confirm gesture lock
-    gesture_lock_duration = 2.0  # Seconds to hold gesture before locking in
+    gesture_confidence_threshold = 0.65
     locked_in = False
-
     previous_hand_sign_id = None
+    hand_sign_name = "No Gesture"
 
     while True:
         fps = cvFpsCalc.get()
@@ -173,62 +172,53 @@ def main():
                 )
 
                 # Hand sign classification
-                hand_sign_id = keypoint_classifier(pre_processed_landmark_list)
+                # hand_sign_id = keypoint_classifier(pre_processed_landmark_list)
+                hand_sign_id, confidence = keypoint_classifier(
+                    pre_processed_landmark_list
+                )
+
                 if hand_sign_id == 1 or 4:  # Point gesture
                     point_history.append(landmark_list[8])
                 else:
                     point_history.append([0, 0])
 
                 # Check if the current gesture is the same as the last one
-                if hand_sign_id == previous_hand_sign_id:
-                    gesture_counter += 1  # Increment the gesture counter
+                if confidence >= gesture_confidence_threshold:
+                    if hand_sign_id == previous_hand_sign_id:
+                        gesture_counter += 1  # Increment the gesture counter
 
-                    # if gesture_start_time is None:
-                    #     gesture_start_time = time.time()  # Start the timer
-                    #     print(f"Gesture: {hand_sign_name} detection started")
-
-                    # Calculate the duration the gesture has been held
-                    # gesture_duration = time.time() - gesture_start_time
-
-                    if not locked_in:
-                        # print(
-                        #     # f"Gesture: {hand_sign_name} detected for {gesture_counter} frames, {gesture_duration:.2f} seconds"
-                        #     f"Gesture: {hand_sign_name} detected for {gesture_counter} frames"
-                        # )
-                        sys.stdout.write(
-                            f"\rGesture: {hand_sign_name} detected for {gesture_counter} frames"
-                        )
-                        sys.stdout.flush()
-
-                    # Check if the gesture has been held for long enough or detected for enough frames
-                    if (
-                        gesture_counter
-                        >= gesture_lock_threshold
-                        # or gesture_duration >= gesture_lock_duration
-                    ):
                         if not locked_in:
-                            print(f"\nGesture: {hand_sign_name} locked in")
-                            locked_in = True
+                            sys.stdout.write(
+                                f"\rGesture: {hand_sign_name} detected for {gesture_counter} frames, confidence = {confidence}"
+                            )
+                            sys.stdout.flush()
 
-                    # else:
-                    # This else block is for clarity, indicating we're still in the process of locking in the gesture
-                    # print(
-                    #     f"Progressing towards lock-in for gesture: {hand_sign_name}"
-                    # )
-                else:
-                    # If the current gesture is different from the last one, reset counters and state
-                    # if gesture_counter > 0 or gesture_start_time is not None:
-                    if gesture_counter > 0 != None:
-                        print(f"\nGesture: {hand_sign_name} reset before lock-in")
-                    gesture_counter = 0
-                    gesture_start_time = None
-                    locked_in = False
+                        # Check if the gesture has been held for long enough or detected for enough frames
+                        if (
+                            gesture_counter
+                            >= gesture_lock_threshold
+                            # or gesture_duration >= gesture_lock_duration
+                        ):
+                            if not locked_in:
+                                print(f"\nGesture: {hand_sign_name} locked in")
+                                print(
+                                    f"Ready to send data for gesture: {hand_sign_name}"
+                                )
+                                locked_in = True
+                    else:
+                        # If a different gesture is detected, print a reset message and clear the line
+                        if gesture_counter > 0:
+                            print(f"\nGesture reset before lock-in.")
+                        gesture_counter = 0
+                        locked_in = False
 
                 previous_hand_sign_id = hand_sign_id  # Update the previous gesture ID for the next iteration
 
-                hand_sign_id = keypoint_classifier(pre_processed_landmark_list)
+                # hand_sign_id = keypoint_classifier(pre_processed_landmark_list)
+                hand_sign_id, confidence = keypoint_classifier(
+                    pre_processed_landmark_list
+                )
                 hand_sign_name = keypoint_classifier_labels[hand_sign_id]
-                # print(f"Hand Sign ID: {hand_sign_id}, Name: {keypoint_classifier_labels[hand_sign_id]}")
 
                 # Finger gesture classification
                 finger_gesture_id = 0
@@ -246,33 +236,35 @@ def main():
                     most_common_fg_id[0][0]
                 ]
 
-                gesture_data = {
-                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "hand_sign": {
-                        "id": int(
-                            hand_sign_id
-                        ),  # Convert to Python int if it's numpy.int64
-                        "name": hand_sign_name,
-                    },
-                    "finger_gesture": {
-                        "id": int(most_common_fg_id[0][0]),  # Convert to Python int
-                        "name": finger_gesture_name,
-                    },
-                    "coords": {
-                        # "x": (
-                        #     float(x) if x is not None else None
-                        # ),  # Ensure x is a float or None
-                        # "y": (
-                        #     float(y) if y is not None else None
-                        # ),  # Ensure y is a float or None
-                        # "z": (
-                        #     float(z) if z is not None else None
-                        # ),  # Ensure z is a float or None
-                        "x": float(1),
-                        "y": float(2),
-                        "z": float(3),
-                    },
-                }
+                # if locked_in:
+
+                # gesture_data = {
+                #     "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                #     "hand_sign": {
+                #         "id": int(
+                #             hand_sign_id
+                #         ),  # Convert to Python int if it's numpy.int64
+                #         "name": hand_sign_name,
+                #     },
+                #     "finger_gesture": {
+                #         "id": int(most_common_fg_id[0][0]),  # Convert to Python int
+                #         "name": finger_gesture_name,
+                #     },
+                #     "coords": {
+                #         # "x": (
+                #         #     float(x) if x is not None else None
+                #         # ),  # Ensure x is a float or None
+                #         # "y": (
+                #         #     float(y) if y is not None else None
+                #         # ),  # Ensure y is a float or None
+                #         # "z": (
+                #         #     float(z) if z is not None else None
+                #         # ),  # Ensure z is a float or None
+                #         "x": float(1),
+                #         "y": float(2),
+                #         "z": float(3),
+                #     },
+                # }
 
                 # print(json.dumps(gesture_data, indent=4))
 
@@ -287,9 +279,11 @@ def main():
                     point_history_classifier_labels[most_common_fg_id[0][0]],
                 )
         else:
+            if gesture_counter > 0 or locked_in:
+                print("\nNo gesture detected. Resetting...")
             point_history.append([0, 0])
             gesture_counter = 0
-            gesture_start_time = None
+            previous_hand_sign_id = None
             locked_in = False
 
         debug_image = draw_point_history(debug_image, point_history)
