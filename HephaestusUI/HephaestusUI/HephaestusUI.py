@@ -74,6 +74,15 @@ def rotate_camera(view_control, axis, degrees=5):
     cam_params.extrinsic = new_extrinsic  # Set the new extrinsic matrix
     view_control.convert_from_pinhole_camera_parameters(cam_params, True)
     
+def axis2arr(axis, delta, alpha):
+    match axis:
+        case "x":
+            return [delta*alpha, 0, 0]
+        case "y":
+            return [0, delta*alpha, 0]
+        case "z":
+            return [0, 0, delta*alpha]
+    
 
 def startClient():
     # should have error control
@@ -97,49 +106,61 @@ def closeClient(sock):
 # PARSE COMMAND
 # ----------------------------------------------------------------------------------------
 
-def parseCommand(command, view_control, camera_parameters, vis, geometry_dir):
-    # FORMAT:
-    # [TYPE] [SUBTYPE] [(COORDS1)]* [(COORDS2)]* [ID]* [(DIMENSIONS)]*
-    # * -- optional
-    # eg1 "cam rotate (20,0,-50)" -- rotate camera 20deg about x-axis and -50deg about z-axis
-    # eg2 "create box (1,2,3) (0.4,0.8,0.4) -- create new box mesh at (1, 2, 3) with dimensions 0.4*0.8*0.4
+def parseCommand(command, view_control, camera_parameters, vis, geometry_dir, history, objectHandle):
+    # FORMAT
+    # [command] [subcommand]
 
     info = command.split(" ")
 
     match info[0]:
         case "cam":
-            handleCam(info[1:], view_control)
+            handleCam(info[1:], view_control, history)
+        case "select":
+            return handleSelection()
         case "create":
             handleNewGeo(info[1:], view_control)
         case "update":
             handleUpdateGeo(info[1:])
             
-def handleCam(subcommand, view_control):
-    vals = list(map(float, subcommand[1].strip("()").split(","))) # isolate dimensions and convert to float
+def handleCam(subcommand, view_control, history):
+    
+    # FORMAT:
+    # start [operation] [axis] [position]
+    # position n
+    # position n+1
+    # position n+2
+    # ...
+    # position n+m
+    # end [operation] [axis]
+
+    # history: {operation:operation, axis:axis, lastVal:lastVal}
+
+    alphaM = 1 # translation scaling factor
+    alphaR = 1 # rotation scaling factor
     
     match subcommand[0]:
-        case "move":
-            # taking current reference frame: 
-            # x = zoom in/out
-            # y = left/right 
-            # z = up/down
+        case "start":
+            print("starting motion")
+            history["operation"] = subcommand[1]
+            history["axis"] = subcommand[2]
+            history["lastVal"] = subcommand[3]
+        case "end":
+            print("ending motion")
+            history["operation"] = ""
+            history["axis"] = ""
+            history["lastVal"] = ""
+        case "position":
+            print("update position")
+            match history["operation"]:
+                case "move": # treat zoom as relative frame z-axis translation
+                    delta = subcommand[1] - history["lastVal"]
+                    move_camera_v2(view_control, history["axis"], delta*alphaM)
+                case "rotate":
+                    delta = subcommand[1] - history["lastVal"]
+                    rotate_camera(view_control, history["axis"], degrees=delta*alphaR)
+        case _:
+            print("INVALID COMMAND")
 
-            print("moving by " + str(subcommand[1]))
-            if (vals[0] != 0):
-                move_camera_v2(view_control, 'x', vals[0])
-            if (vals[1] != 0):
-                move_camera_v2(view_control, 'y', vals[1])
-            if (vals[2] != 0):
-                move_camera_v2(view_control, 'z', vals[2])
-                
-        case "rotate":
-            print("rotating by " + str(subcommand[1]))
-            if (vals[0] != 0):
-                rotate_camera(view_control, 'x', degrees=vals[0])
-            if (vals[1] != 0):
-                rotate_camera(view_control, 'y', degrees=vals[1])
-            # if (dimensions[2] != 0): # z rotation not implemented yet
-            #     rotate_camera(view_control, 'z', degrees=dimensions[2])
 
 def handleNewGeo(subcommand, view_control, camera_parameters, vis, geometry_dir):
     match subcommand[0]:
@@ -169,8 +190,49 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, geometry_dir)
         # case "point": # is point handling useful on its own?
         #     print("Creating new point at ___")
 
-def handleUpdateGeo(subcommand):
-    return ""
+def handleUpdateGeo(subcommand, geometryDir, history, objectHandle):
+
+    alphaM = 1 # translation scaling factor
+    alphaR = 1 # rotation scaling factor
+    alphaS = 1 # scaling scaling factor
+
+    match subcommand[0]:
+        case "start":
+            print("starting motion")
+            history["operation"] = subcommand[1]
+            history["axis"] = subcommand[2]
+            history["lastVal"] = subcommand[3]
+        case "end":
+            print("ending motion")
+            history["operation"] = ""
+            history["axis"] = ""
+            history["lastVal"] = ""
+        case "position":
+            print("update position")
+            delta = subcommand[1] - history["lastVal"]
+            thisGeo = geometryDir[objectHandle]
+            match history["operation"]:
+                case "move": # treat zoom as relative frame z-axis translation
+                    arr = axis2arr(history["axis"], delta, alphaM)
+                    thisGeo.translate(np.array(arr))
+                case "rotate":
+                    arr = axis2arr(history["axis"], delta, alphaR)
+                    R = thisGeo.get_rotation_matrix_from_axis_angle(np.array(arr))
+                    thisGeo.rotate(R, center=(0, 0, 0)) # investigate how center works
+                case "scale":
+                    thisGeo.scale(delta*alphaS, center=thisGeo.get_center())
+
+
+                    
+                    
+        case _:
+            print("INVALID COMMAND")
+    
+def handleSelection():
+    # if cursorIsOnObject
+    #   return object
+    # else invalid
+    return
 
 # ----------------------------------------------------------------------------------------
 # MAIN
@@ -217,7 +279,8 @@ def main():
 
     i = 1 # temp
     
-    geometry_dir = {"counters":{"pcd":0, "ls":0, "mesh":0}} # put all new geo objects here so we have handle to update
+    geometry_dir = {"counters":{"pcd":0, "ls":0, "mesh":0}} # may need to be changed depending on how selection works
+    
     pcd_counter = 0 # number of pointclouds # remove
     ls_counter = 0 # number of linesets # remove
     mesh_counter = 0 # number of meshes # remove
