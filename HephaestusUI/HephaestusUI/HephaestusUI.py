@@ -82,6 +82,14 @@ def axis2arr(axis, delta, alpha):
             return [0, delta*alpha, 0]
         case "z":
             return [0, 0, delta*alpha]
+        
+
+def smartConnect(endPoint, startPoint):
+    threshold = 0.1 # tune
+    if abs(endPoint[0] - startPoint[0]) < threshold and abs(endPoint[1] - startPoint[1]) < threshold:
+        return startPoint
+    else:
+        return endPoint
     
 
 def startClient():
@@ -203,11 +211,63 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, geometry_dir)
             camera_parameters.extrinsic = current_view_matrix
             view_control.convert_from_pinhole_camera_parameters(camera_parameters, True)
         case "line": # line handling not implemented yet
-            print("Creating new line with endpoints ___ and ___")
-            points = np.array([[0,0,0], [0.1, 0.1, 0.1]])
-            lines = np.array([[0, 1]])
-        # case "point": # is point handling useful on its own?
-        #     print("Creating new point at ___")
+            if subcommand[1] == "start":
+                points = np.empty()
+                lines = np.empty()
+                i = 2
+                print("Creating new line with endpoints ___ and ___")
+                coords1 = subcommand[2].strip("()").split(",")
+                coords2 = subcommand[3].strip("()").split(",")
+                points = np.array([coords1, coords2])
+                lines = np.array([[0, 1]])
+                
+                # Store the current view matrix
+                current_view_matrix = view_control.convert_to_pinhole_camera_parameters().extrinsic
+
+                pcd = o3d.geometry.PointCloud()
+                pcd.points = o3d.utility.Vector3dVector(points)
+
+                ls = o3d.geometry.LineSet()
+                ls.points = o3d.utility.Vector3dVector(points)
+                ls.lines = o3d.utility.Vector2iVector(lines)
+
+                vis.add_geometry(pcd)
+                vis.add_geometry(ls)
+
+                lsName = "ls" + str(geometry_dir["counters"]["ls"])
+                geometry_dir[lsName] = ls
+                pcdName = "pcd" + str(geometry_dir["counters"]["pcd"])
+                geometry_dir[pcdName] = pcd
+                geometry_dir["counters"]["pcd"] += 1
+        
+                # Set back the stored view matrix
+                camera_parameters.extrinsic = current_view_matrix
+                view_control.convert_from_pinhole_camera_parameters(camera_parameters, True)
+
+
+            elif subcommand[1] == "end":
+                print("Ending line")
+                # threshold for connecting closed-loop geometry
+                endPoint = smartConnect(subcommand[2].strip("()").split(","), points[0])
+
+                add_this = o3d.utilityVector3dVector(np.array([endPoint]))
+                pcd.points.extend(add_this) # get proper references for this
+                ls.points.extend(add_this) # get proper references for this
+                ls.lines.extend(o3d.utilityVector2iVector(np.array([[i-1, i]])))
+        
+                vis.update_geometry(pcd)
+                vis.update_geometry(ls)
+
+            else:
+                add_this = o3d.utilityVector3dVector(np.array([subcommand[1].strip("()").split(",")]))
+                pcd.points.extend(add_this) # get proper references for this
+                ls.points.extend(add_this) # get proper references for this
+                ls.lines.extend(o3d.utilityVector2iVector(np.array([[i-1, i]])))
+        
+                vis.update_geometry(pcd)
+                vis.update_geometry(ls)
+
+                i += 1
 
 def handleUpdateGeo(subcommand, geometryDir, history, objectHandle):
 
