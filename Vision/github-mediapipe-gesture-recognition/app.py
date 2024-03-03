@@ -295,7 +295,8 @@ def main():
             previous_hand_sign_id = None
             locked_in = False
 
-        debug_image = draw_point_history(debug_image, point_history)
+        # debug_image = draw_point_history(debug_image, point_history)
+        debug_image = draw_current_pointer_coordinates(debug_image, point_history)
         debug_image = draw_info(debug_image, fps, mode, number)
 
         # Screen reflection #############################################################
@@ -745,11 +746,89 @@ def draw_info_text(image, brect, handedness, hand_sign_text, finger_gesture_text
 
 
 def draw_point_history(image, point_history):
+    # for index, point in enumerate(point_history):
+    #     if point[0] != 0 and point[1] != 0:
+    #         cv.circle(
+    #             image, (point[0], point[1]), 1 + int(index / 2), (152, 251, 152), 2
+    #         )
+
+    # Initialize an empty string to accumulate coordinates
+    coordinates_text = ""
+
     for index, point in enumerate(point_history):
         if point[0] != 0 and point[1] != 0:
+            # Draw circle for each point in history
             cv.circle(
                 image, (point[0], point[1]), 1 + int(index / 2), (152, 251, 152), 2
             )
+            # Append the current point's coordinates to the string
+            coordinates_text += f"({point[0]}, {point[1]}) "
+
+    # Display all coordinates in the top right corner of the image
+    # Calculate the position based on the image size and the length of the coordinates_text
+    text_size = cv.getTextSize(coordinates_text, cv.FONT_HERSHEY_SIMPLEX, 0.5, 1)[0]
+    text_x = image.shape[1] - text_size[0] - 10  # 10 pixels from the right edge
+    text_y = 20  # 20 pixels from the top
+
+    # Draw a background rectangle for better readability
+    cv.rectangle(
+        image, (text_x, text_y - 14), (text_x + text_size[0], text_y + 5), (0, 0, 0), -1
+    )
+
+    # Display the coordinates text
+    cv.putText(
+        image,
+        coordinates_text,
+        (text_x, text_y),
+        cv.FONT_HERSHEY_SIMPLEX,
+        0.5,  # Font scale
+        (255, 255, 255),  # Font color
+        1,  # Thickness
+        cv.LINE_AA,
+    )
+    return image
+
+
+def draw_current_pointer_coordinates(image, point_history):
+    if not point_history:
+        return image  # If the history is empty, return the image as is
+
+    # Assuming the last point in point_history is the current pointer
+    current_point = point_history[-1]
+
+    if current_point[0] == 0 and current_point[1] == 0:
+        return (
+            image  # If the current point is (0,0), it's considered invalid/not present
+        )
+
+    # Prepare the text to display the current point's coordinates
+    coordinates_text = f"Current: ({current_point[0]}, {current_point[1]})"
+
+    # Determine the position for the text (top right corner)
+    text_size = cv.getTextSize(coordinates_text, cv.FONT_HERSHEY_SIMPLEX, 0.5, 1)[0]
+    text_x = image.shape[1] - text_size[0] - 10  # 10 pixels from the right edge
+    text_y = 20  # 20 pixels from the top
+
+    # Draw a background rectangle for better readability
+    cv.rectangle(
+        image,
+        (text_x - 5, text_y - 14),
+        (text_x + text_size[0] + 5, text_y + 5),
+        (0, 0, 0),
+        -1,
+    )
+
+    # Display the coordinates text
+    cv.putText(
+        image,
+        coordinates_text,
+        (text_x, text_y),
+        cv.FONT_HERSHEY_SIMPLEX,
+        0.5,  # Font scale
+        (255, 255, 255),  # Font color
+        1,  # Thickness
+        cv.LINE_AA,
+    )
 
     return image
 
