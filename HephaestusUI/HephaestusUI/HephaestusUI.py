@@ -111,16 +111,24 @@ def parseCommand(command, view_control, camera_parameters, vis, geometry_dir, hi
     # [command] [subcommand]
 
     info = command.split(" ")
+    print(info)
 
     match info[0]:
-        case "cam":
-            handleCam(info[1:], view_control, history)
+        case "motion":
+            if objectHandle == "":
+                handleCam(info[1:], view_control, history)
+                return ""
+            else:
+                handleUpdateGeo(info[1:], geometry_dir, history, objectHandle)
+                return ""
         case "select":
             return handleSelection()
         case "create":
             handleNewGeo(info[1:], view_control)
+            return ""
         case "update":
-            handleUpdateGeo(info[1:])
+            handleUpdateGeo(info[1:], geometry_dir, history, objectHandle)
+            return ""
             
 def handleCam(subcommand, view_control, history):
     
@@ -137,27 +145,38 @@ def handleCam(subcommand, view_control, history):
 
     alphaM = 1 # translation scaling factor
     alphaR = 1 # rotation scaling factor
+    alphaZ = 1 # zoom scaling factor
     
     match subcommand[0]:
         case "start":
             print("starting motion")
             history["operation"] = subcommand[1]
-            history["axis"] = subcommand[2]
-            history["lastVal"] = subcommand[3]
+            if (history["operation"] == "zoom"):
+                history["lastVal"] = subcommand[2]
+            else:
+                history["axis"] = subcommand[2]
+                history["lastVal"] = subcommand[3]
+            print(history)
         case "end":
             print("ending motion")
             history["operation"] = ""
             history["axis"] = ""
             history["lastVal"] = ""
         case "position":
-            print("update position")
             match history["operation"]:
-                case "move": # treat zoom as relative frame z-axis translation
-                    delta = subcommand[1] - history["lastVal"]
+                case "pan":
+                    print("camera pan update")
+                    delta = float(subcommand[1]) - float(history["lastVal"])
                     move_camera_v2(view_control, history["axis"], delta*alphaM)
                 case "rotate":
-                    delta = subcommand[1] - history["lastVal"]
+                    print("camera rotate update")
+                    delta = float(subcommand[1]) - float(history["lastVal"])
                     rotate_camera(view_control, history["axis"], degrees=delta*alphaR)
+                case "zoom":
+                    print("camera zoom update")
+                    delta = float(subcommand[1]) - float(history["lastVal"])
+                    move_camera_v2(view_control, "x", delta*alphaZ)
+            history["lastVal"] = subcommand[1]
         case _:
             print("INVALID COMMAND")
 
@@ -221,10 +240,6 @@ def handleUpdateGeo(subcommand, geometryDir, history, objectHandle):
                     thisGeo.rotate(R, center=(0, 0, 0)) # investigate how center works
                 case "scale":
                     thisGeo.scale(delta*alphaS, center=thisGeo.get_center())
-
-
-                    
-                    
         case _:
             print("INVALID COMMAND")
     
@@ -244,8 +259,8 @@ def main():
     
     camera_parameters = o3d.camera.PinholeCameraParameters()
 
-    width = 640
-    height = 480
+    width = 1280
+    height = 960
     focal = 0.9616278814278851
 
     K = [[focal * width, 0, width / 2],
@@ -281,6 +296,9 @@ def main():
     
     geometry_dir = {"counters":{"pcd":0, "ls":0, "mesh":0}} # may need to be changed depending on how selection works
     
+    history = {"operation":"", "axis":"", "lastVal":""}
+    objectHandle = ""
+    
     pcd_counter = 0 # number of pointclouds # remove
     ls_counter = 0 # number of linesets # remove
     mesh_counter = 0 # number of meshes # remove
@@ -289,72 +307,74 @@ def main():
     while True:
         # queue system? threading?
         command = getTCPData(in_socket)
-        
-        match command:
-            case 'w':
-                move_camera(view_control, 'up')
-            case 's':
-                move_camera(view_control, 'down')
-            case 'a':
-                move_camera(view_control, 'left')
-            case 'd':
-                move_camera(view_control, 'right')
-            case 'z':
-                move_camera(view_control, 'forward')
-            case 'x':
-                move_camera(view_control, 'backward')
-            case '1':
-                rotate_camera(view_control, 'x', degrees=-5)
-            case '2':
-                rotate_camera(view_control, 'x', degrees=5)
-            case '9':
-                rotate_camera(view_control, 'y', degrees=-5)
-            case '0':
-                rotate_camera(view_control, 'y', degrees=5)
-            case 'n':
-                # Store the current view matrix
-                current_view_matrix = view_control.convert_to_pinhole_camera_parameters().extrinsic
 
-                new_box = o3d.geometry.TriangleMesh.create_box(width=0.2, height=0.2, depth=0.2)
-                new_box.compute_vertex_normals()
-                new_box.translate(np.array([i*0.2, i*0.2, i*0.2]))
-                vis.add_geometry(new_box)
-                name = "mesh" + str(mesh_counter)
-                geometry_dir[name] = new_box
-                mesh_counter += 1
-                i += 1 # temp
+        objectHandle = parseCommand(command, view_control, camera_parameters, vis, geometry_dir, history, objectHandle)
         
-                # Set back the stored view matrix
-                camera_parameters.extrinsic = current_view_matrix
-                view_control.convert_from_pinhole_camera_parameters(camera_parameters, True)
-            case 'o':
-                # add new pointcloud
-                # Store the current view matrix
-                current_view_matrix = view_control.convert_to_pinhole_camera_parameters().extrinsic
+        # match command:
+        #     case 'w':
+        #         move_camera(view_control, 'up')
+        #     case 's':
+        #         move_camera(view_control, 'down')
+        #     case 'a':
+        #         move_camera(view_control, 'left')
+        #     case 'd':
+        #         move_camera(view_control, 'right')
+        #     case 'z':
+        #         move_camera(view_control, 'forward')
+        #     case 'x':
+        #         move_camera(view_control, 'backward')
+        #     case '1':
+        #         rotate_camera(view_control, 'x', degrees=-5)
+        #     case '2':
+        #         rotate_camera(view_control, 'x', degrees=5)
+        #     case '9':
+        #         rotate_camera(view_control, 'y', degrees=-5)
+        #     case '0':
+        #         rotate_camera(view_control, 'y', degrees=5)
+        #     case 'n':
+        #         # Store the current view matrix
+        #         current_view_matrix = view_control.convert_to_pinhole_camera_parameters().extrinsic
 
-                # initialize pointcloud instance.
-                new_pcd = o3d.geometry.PointCloud()
-                # *optionally* add initial points
-                points = np.random.rand(10, 3)
-                new_pcd.points = o3d.utility.Vector3dVector(points)
-                # include it in the visualizer before non-blocking visualization.
-                vis.add_geometry(new_pcd)
-                name = "pcd" + str(pcd_counter)
-                geometry_dir[name] = new_pcd
-                pcd_counter += 1
+        #         new_box = o3d.geometry.TriangleMesh.create_box(width=0.2, height=0.2, depth=0.2)
+        #         new_box.compute_vertex_normals()
+        #         new_box.translate(np.array([i*0.2, i*0.2, i*0.2]))
+        #         vis.add_geometry(new_box)
+        #         name = "mesh" + str(mesh_counter)
+        #         geometry_dir[name] = new_box
+        #         mesh_counter += 1
+        #         i += 1 # temp
         
-                # Set back the stored view matrix
-                camera_parameters.extrinsic = current_view_matrix
-                view_control.convert_from_pinhole_camera_parameters(camera_parameters, True)
-            case 'p':
-                # update pointcloud
-                selection = geometry_dir["pcd0"] # hardcoded, make better
-                selection.points.extend(np.random.rand(10, 3))
-                vis.update_geometry(selection)
-            # case 'k':
-            #     # create new lineset
-            # case 'l':
-            #     # update existing lineset
+        #         # Set back the stored view matrix
+        #         camera_parameters.extrinsic = current_view_matrix
+        #         view_control.convert_from_pinhole_camera_parameters(camera_parameters, True)
+        #     case 'o':
+        #         # add new pointcloud
+        #         # Store the current view matrix
+        #         current_view_matrix = view_control.convert_to_pinhole_camera_parameters().extrinsic
+
+        #         # initialize pointcloud instance.
+        #         new_pcd = o3d.geometry.PointCloud()
+        #         # *optionally* add initial points
+        #         points = np.random.rand(10, 3)
+        #         new_pcd.points = o3d.utility.Vector3dVector(points)
+        #         # include it in the visualizer before non-blocking visualization.
+        #         vis.add_geometry(new_pcd)
+        #         name = "pcd" + str(pcd_counter)
+        #         geometry_dir[name] = new_pcd
+        #         pcd_counter += 1
+        
+        #         # Set back the stored view matrix
+        #         camera_parameters.extrinsic = current_view_matrix
+        #         view_control.convert_from_pinhole_camera_parameters(camera_parameters, True)
+        #     case 'p':
+        #         # update pointcloud
+        #         selection = geometry_dir["pcd0"] # hardcoded, make better
+        #         selection.points.extend(np.random.rand(10, 3))
+        #         vis.update_geometry(selection)
+        #     # case 'k':
+        #     #     # create new lineset
+        #     # case 'l':
+        #     #     # update existing lineset
                 
 
         vis.poll_events()
