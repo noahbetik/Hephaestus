@@ -27,6 +27,12 @@ import socket
 print("Current Working Directory:", os.getcwd())
 
 
+def load_gesture_definitions(filename):
+    with open(filename, "r") as file:
+        gesture_definitions = json.load(file)
+    return gesture_definitions
+
+
 def get_args():
     parser = argparse.ArgumentParser()
 
@@ -129,7 +135,13 @@ def main():
     gesture_confidence_threshold = 0.65  # Confidence level to be valid
     locked_in = False
     previous_hand_sign_id = None
+    active_gesture_id = None
+    motion_started = False
+    gesture_ended = None
     hand_sign_name = "No Gesture"
+
+    # Get gesture types
+    gesture_types = load_gesture_definitions("./tcp/gestures.json")
 
     while True:
         fps = cvFpsCalc.get()
@@ -190,38 +202,121 @@ def main():
                 else:
                     point_history.append([0, 0])
 
-                # Check if the current gesture is the same as the last one
+                # If confidence is high enough..
                 if confidence >= gesture_confidence_threshold:
-                    if hand_sign_id == previous_hand_sign_id:
-                        gesture_counter += 1  # Increment the gesture counter
+                    # If we're not locked in yet...
+                    if not locked_in:
+                        # If the current gesture detected is the same as the last frame...
+                        if hand_sign_id == previous_hand_sign_id and hand_sign_id != 5:
+                            gesture_counter += 1  # Increment gesture counter
 
-                        if not locked_in:
                             sys.stdout.write(
-                                f"\rGesture: {hand_sign_name} detected for {gesture_counter} frames, confidence = {confidence}"
+                                f"\rGesture: {hand_sign_name}, Frames: {gesture_counter}, Confidence: {confidence:.5f}"
                             )
                             sys.stdout.flush()
 
-                        # Check if the gesture has been held for long enough or detected for enough frames
-                        if (
-                            gesture_counter
-                            >= gesture_lock_threshold
-                            # or gesture_duration >= gesture_lock_duration
-                        ):
-                            if not locked_in:
+                            # If we reach the threshold for a gesture, lock in
+                            if gesture_counter >= gesture_lock_threshold:
                                 locked_in = True
+                                active_gesture_id = hand_sign_id
+                                gesture_ended = False
+                                gesture_type = gesture_types[hand_sign_name]["type"]
+                                gesture_subtype = gesture_types[hand_sign_name][
+                                    "subtype"
+                                ]
                                 print(f"\nGesture: {hand_sign_name} locked in")
-                                tcp_client.send_gesture(hand_sign_name)
-                                print(
-                                    f"Sent locked in confirmation for gesture: {hand_sign_name}"
+                                tcp_client.send_gesture(  # Send "start" command for the gesture
+                                    f"{gesture_type} {gesture_subtype} start"
                                 )
+                        # If the current gesture is not the same as the last frame...
+                        else:
+                            gesture_counter = 0  # Reset counter
                     else:
-                        # If a different gesture is detected, print a reset message and clear the line
-                        if gesture_counter > 0:
-                            print(f"\nGesture reset before lock-in.")
-                        gesture_counter = 0
-                        locked_in = False
+                        # If it's the thumbs down gesture...
+                        if hand_sign_id == 5:
+                            if hand_sign_id == previous_hand_sign_id:
+                                gesture_counter += 1
 
-                previous_hand_sign_id = hand_sign_id  # Update the previous gesture ID for the next iteration
+                                sys.stdout.write(
+                                    f"\rGesture: {hand_sign_name}, Frames: {gesture_counter}, Confidence: {confidence:.5f}"
+                                )
+                                sys.stdout.flush()
+                                if gesture_counter >= gesture_lock_threshold:
+                                    print()
+                                    tcp_client.send_gesture(
+                                        f"{gesture_type} {gesture_subtype} end"
+                                    )
+                                    locked_in = False
+                                    gesture_counter = 0
+                                    active_gesture_id = None
+                            else:
+                                gesture_counter = 1
+                        elif hand_sign_id == active_gesture_id:
+                            gesture_type = gesture_types[hand_sign_name]["type"]
+                            gesture_subtype = gesture_types[hand_sign_name]["subtype"]
+                            tcp_client.send_gesture(  # Send "start" command for the gesture
+                                f"{gesture_type} {gesture_subtype} active"
+                            )
+                        else:
+                            pass
+
+                previous_hand_sign_id = hand_sign_id
+
+                # Check if the current gesture is the same as the last one
+                # if confidence >= gesture_confidence_threshold:
+                #     if hand_sign_id == previous_hand_sign_id:
+                #         gesture_counter += 1  # Increment the gesture counter
+
+                #         if gesture_counter <= gesture_lock_threshold:
+                #             sys.stdout.write(
+                #                 f"\rGesture: {hand_sign_name} detected for {gesture_counter} frames, confidence = {confidence}"
+                #             )
+                #             sys.stdout.flush()
+
+                #         if (
+                #             not locked_in
+                #             and gesture_counter >= gesture_lock_threshold
+                #             and hand_sign_name != "Thumbs Down"
+                #         ):
+                #             # Only lock in and send start command once
+                #             locked_in = True
+                #             gesture_type = gesture_types[hand_sign_name]["type"]
+                #             gesture_subtype = gesture_types[hand_sign_name]["subtype"]
+                #             print(f"\nGesture: {hand_sign_name} locked in")
+                #             tcp_client.send_gesture(
+                #                 f"{gesture_type} {gesture_subtype} start"
+                #             )
+                #             print(f"{gesture_type} {gesture_subtype} start")
+                #         elif (
+                #             not locked_in
+                #             and gesture_counter >= gesture_lock_threshold
+                #             and hand_sign_name == "Thumbs Down"
+                #         ):
+                #             # Handle "thumbs down" gesture to end the motion
+                #             print(f"{gesture_type} {gesture_subtype} end")
+                #             tcp_client.send_gesture(
+                #                 f"{gesture_type} {gesture_subtype} end"
+                #             )
+                #             locked_in = False
+                #             gesture_counter = 0  # Reset the counter for new gestures
+                #     else:  # Gesture has changed
+                #         if hand_sign_name == "Thumbs Down" and locked_in:
+                #             # Handle "thumbs down" gesture to end the motion
+                #             # print(f"{gesture_type} {gesture_subtype} end")
+                #             # tcp_client.send_gesture(
+                #             # f"{gesture_type} {gesture_subtype} end"
+                #             # )
+                #             locked_in = False
+                #             gesture_counter = 0  # Reset the counter for new gestures
+                #         # else:
+                #         #     # Different gesture detected, not "thumbs down"
+                #         #     print(
+                #         #         "Different gesture detected. Waiting for 'thumbs down' to end."
+                #         #     )
+                #         #     # Optionally, add logic here to handle other gestures while locked in
+                #         #     gesture_counter = 1  # Start counting for the new gesture
+
+                #     previous_hand_sign_id = hand_sign_id
 
                 # hand_sign_id = keypoint_classifier(pre_processed_landmark_list)
                 hand_sign_id, confidence = keypoint_classifier(
@@ -244,38 +339,6 @@ def main():
                 finger_gesture_name = point_history_classifier_labels[
                     most_common_fg_id[0][0]
                 ]
-
-                # if locked_in:
-
-                # gesture_data = {
-                #     "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                #     "hand_sign": {
-                #         "id": int(
-                #             hand_sign_id
-                #         ),  # Convert to Python int if it's numpy.int64
-                #         "name": hand_sign_name,
-                #     },
-                #     "finger_gesture": {
-                #         "id": int(most_common_fg_id[0][0]),  # Convert to Python int
-                #         "name": finger_gesture_name,
-                #     },
-                #     "coords": {
-                #         # "x": (
-                #         #     float(x) if x is not None else None
-                #         # ),  # Ensure x is a float or None
-                #         # "y": (
-                #         #     float(y) if y is not None else None
-                #         # ),  # Ensure y is a float or None
-                #         # "z": (
-                #         #     float(z) if z is not None else None
-                #         # ),  # Ensure z is a float or None
-                #         "x": float(1),
-                #         "y": float(2),
-                #         "z": float(3),
-                #     },
-                # }
-
-                # print(json.dumps(gesture_data, indent=4))
 
                 # Drawing part
                 debug_image = draw_bounding_rect(use_brect, debug_image, brect)
