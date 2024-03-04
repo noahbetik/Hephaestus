@@ -2,6 +2,9 @@ import open3d as o3d
 import numpy as np
 import keyboard
 import socket as s
+import time
+from scipy.spatial.transform import Rotation as R
+from scipy.spatial.transform import Slerp
 
 # ----------------------------------------------------------------------------------------
 # SHORTCUTS
@@ -12,6 +15,60 @@ import socket as s
 # ----------------------------------------------------------------------------------------
 # HELPER FUNCTIONS
 # ----------------------------------------------------------------------------------------
+def convert_rotation_matrix_to_quaternion(rotation_matrix):
+    # Ensure the rotation matrix is writable by making a copy
+    rotation_matrix_copy = np.array(rotation_matrix, copy=True)
+    return R.from_matrix(rotation_matrix_copy).as_quat()
+
+def convert_quaternion_to_rotation_matrix(quaternion):
+    return R.from_quat(quaternion).as_matrix()
+
+
+def quaternion_slerp(quat_start, quat_end, fraction):
+    # Create a times series for keyframe quaternions
+    key_times = [0, 1]  # Start and end times
+    key_rots = R.from_quat([quat_start, quat_end])  # Keyframe rotations
+    
+    # Create the interpolator object
+    slerp = Slerp(key_times, key_rots)
+    
+    # Interpolate the rotation at the given fraction
+    interp_rot = slerp([fraction])
+    
+    # Return the interpolated quaternion
+    return interp_rot.as_quat()[0]  # Slerp returns an array of rotations
+    
+def smooth_transition(vis, view_control, target_extrinsic, steps=100):
+    current_extrinsic = view_control.convert_to_pinhole_camera_parameters().extrinsic
+    current_translation = current_extrinsic[:3, 3]
+    target_translation = target_extrinsic[:3, 3]
+
+    # Convert rotation matrices to quaternions
+    current_quat = convert_rotation_matrix_to_quaternion(current_extrinsic[:3, :3])
+    target_quat = convert_rotation_matrix_to_quaternion(target_extrinsic[:3, :3])
+
+    for step in range(steps):
+        fraction = step / float(steps)
+        
+        # Interpolate translation linearly
+        interp_translation = current_translation + (target_translation - current_translation) * fraction
+        
+        # Interpolate rotation using slerp
+        interp_quat = quaternion_slerp(current_quat, target_quat, fraction)
+        interp_rotation_matrix = convert_quaternion_to_rotation_matrix(interp_quat)
+        
+        # Construct the interpolated extrinsic matrix
+        interp_extrinsic = np.eye(4)
+        interp_extrinsic[:3, :3] = interp_rotation_matrix
+        interp_extrinsic[:3, 3] = interp_translation
+
+        # Set the new extrinsic matrix
+        cam_params = view_control.convert_to_pinhole_camera_parameters()
+        cam_params.extrinsic = interp_extrinsic
+        view_control.convert_from_pinhole_camera_parameters(cam_params, True)
+        vis.poll_events()
+        vis.update_renderer()
+        time.sleep(0.0001) 
 
 def move_camera(view_control, direction, amount=1.5):
     cam_params = view_control.convert_to_pinhole_camera_parameters()
