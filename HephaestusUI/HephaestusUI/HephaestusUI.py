@@ -159,10 +159,12 @@ def startClient():
 
 def getTCPData(sock):
     # should have error control
-    data = sock.recv(1024)
-    readable = data.decode()
+    data = sock.recv(30)
+    readable = data.decode(encoding="ascii")
     print("Received: ", readable)
-    return readable
+    processed = readable.strip("$")
+    print("Strip padding: ", processed)
+    return processed
 
 def closeClient(sock):
     sock.close()
@@ -189,7 +191,7 @@ def parseCommand(command, view_control, camera_parameters, vis, geometry_dir, hi
         case "select":
             return handleSelection()
         case "create":
-            handleNewGeo(info[1:], view_control)
+            handleNewGeo(info[1:], view_control, camera_parameters, vis, geometry_dir)
             return ""
         case "update":
             handleUpdateGeo(info[1:], geometry_dir, history, objectHandle)
@@ -210,7 +212,7 @@ def handleCam(subcommand, view_control, history):
 
     alphaM = 1 # translation scaling factor
     alphaR = 1 # rotation scaling factor
-    alphaZ = 1 # zoom scaling factor
+    alphaZ = 0.1 # zoom scaling factor
     
     match subcommand[0]:
         case "start":
@@ -269,14 +271,19 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, geometry_dir)
             view_control.convert_from_pinhole_camera_parameters(camera_parameters, True)
         case "line": # line handling not implemented yet
             if subcommand[1] == "start":
-                points = np.empty()
-                lines = np.empty()
+                #points = np.empty(1)
+                #lines = np.empty(1)
                 i = 2
                 print("Creating new line with endpoints ___ and ___")
                 coords1 = subcommand[2].strip("()").split(",")
                 coords2 = subcommand[3].strip("()").split(",")
                 points = np.array([coords1, coords2])
                 lines = np.array([[0, 1]])
+
+                print(points)
+                print(type(points))
+                print(lines)
+                print(type(lines))
                 
                 # Store the current view matrix
                 current_view_matrix = view_control.convert_to_pinhole_camera_parameters().extrinsic
@@ -426,73 +433,6 @@ def main():
         command = getTCPData(in_socket)
 
         objectHandle = parseCommand(command, view_control, camera_parameters, vis, geometry_dir, history, objectHandle)
-        
-        # match command:
-        #     case 'w':
-        #         move_camera(view_control, 'up')
-        #     case 's':
-        #         move_camera(view_control, 'down')
-        #     case 'a':
-        #         move_camera(view_control, 'left')
-        #     case 'd':
-        #         move_camera(view_control, 'right')
-        #     case 'z':
-        #         move_camera(view_control, 'forward')
-        #     case 'x':
-        #         move_camera(view_control, 'backward')
-        #     case '1':
-        #         rotate_camera(view_control, 'x', degrees=-5)
-        #     case '2':
-        #         rotate_camera(view_control, 'x', degrees=5)
-        #     case '9':
-        #         rotate_camera(view_control, 'y', degrees=-5)
-        #     case '0':
-        #         rotate_camera(view_control, 'y', degrees=5)
-        #     case 'n':
-        #         # Store the current view matrix
-        #         current_view_matrix = view_control.convert_to_pinhole_camera_parameters().extrinsic
-
-        #         new_box = o3d.geometry.TriangleMesh.create_box(width=0.2, height=0.2, depth=0.2)
-        #         new_box.compute_vertex_normals()
-        #         new_box.translate(np.array([i*0.2, i*0.2, i*0.2]))
-        #         vis.add_geometry(new_box)
-        #         name = "mesh" + str(mesh_counter)
-        #         geometry_dir[name] = new_box
-        #         mesh_counter += 1
-        #         i += 1 # temp
-        
-        #         # Set back the stored view matrix
-        #         camera_parameters.extrinsic = current_view_matrix
-        #         view_control.convert_from_pinhole_camera_parameters(camera_parameters, True)
-        #     case 'o':
-        #         # add new pointcloud
-        #         # Store the current view matrix
-        #         current_view_matrix = view_control.convert_to_pinhole_camera_parameters().extrinsic
-
-        #         # initialize pointcloud instance.
-        #         new_pcd = o3d.geometry.PointCloud()
-        #         # *optionally* add initial points
-        #         points = np.random.rand(10, 3)
-        #         new_pcd.points = o3d.utility.Vector3dVector(points)
-        #         # include it in the visualizer before non-blocking visualization.
-        #         vis.add_geometry(new_pcd)
-        #         name = "pcd" + str(pcd_counter)
-        #         geometry_dir[name] = new_pcd
-        #         pcd_counter += 1
-        
-        #         # Set back the stored view matrix
-        #         camera_parameters.extrinsic = current_view_matrix
-        #         view_control.convert_from_pinhole_camera_parameters(camera_parameters, True)
-        #     case 'p':
-        #         # update pointcloud
-        #         selection = geometry_dir["pcd0"] # hardcoded, make better
-        #         selection.points.extend(np.random.rand(10, 3))
-        #         vis.update_geometry(selection)
-        #     # case 'k':
-        #     #     # create new lineset
-        #     # case 'l':
-        #     #     # update existing lineset
-                
 
         vis.poll_events()
         vis.update_renderer()

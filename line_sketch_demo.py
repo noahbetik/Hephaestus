@@ -70,8 +70,8 @@ while keep_running:
 vis = o3d.visualization.Visualizer()
 vis.create_window(height=480, width=640)
 
-points = np.array([[0,0,0], [0.1, 0.1, 0.1]])
-lines = np.array([[0, 1]])
+points = np.array([[0, 0, 0], [0.2, 0.1, 0], [0.4, 0.8, 0], [0.6, 0.5, 0], [0.8, 0.2, 0], [1, 0.1, 0], [1.2, 0, 0], [0.5, -0.1, 0], [0.4, -1.0, 0], [0.2, -0.1, 0]])
+lines = np.array([[0, 1], [1,2], [2,3], [3,4], [4,5], [5,6], [6,7], [7,8], [8,9], [9,0]])
 
 pcd = o3d.geometry.PointCloud()
 pcd.points = Vector3dVector(points)
@@ -89,7 +89,7 @@ prev_t = time.time()
 
 i = 2
 
-keep_running = True
+'''keep_running = True
 
 while keep_running:
     if time.time() - prev_t > dt:
@@ -104,6 +104,6 @@ while keep_running:
         i += 1
         
     keep_running = vis.poll_events()
-    vis.update_renderer()
+    vis.update_renderer()'''
         
 
