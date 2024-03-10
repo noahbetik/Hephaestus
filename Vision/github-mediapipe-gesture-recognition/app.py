@@ -62,11 +62,11 @@ def get_args():
 def start_command(gesture_type, gesture_subtype, point_history):
     match (gesture_type, gesture_subtype):
         case ("motion", "zoom"):  # 2 fingers
-            return f"motion start zoom {point_history[-1]}"
+            return f"motion start zoom {point_history[-1][0]}"
         case ("motion", "pan"):  # 3 fingers
-            return f"motion start pan x {point_history[-1]}"
+            return f"motion start pan z {point_history[-1][0]}"
         case ("motion", "rotate"):  # fist
-            return f"motion start rotate x {point_history[-1]}"
+            return f"motion start rotate x {point_history[-1][0]}"
         case ("create", "line"):  # pointer
             return f"create start line {point_history[-1]}"
         case ("toggle", "mode"):
@@ -121,7 +121,7 @@ def main():
 
     # Initialize and connect the TCP client
     tcp_client = TCPClient(
-        host="127.0.0.1", port=65433
+        host="localhost", port=4444
     )  # Adjust host and port if needed
     tcp_client.connect()
 

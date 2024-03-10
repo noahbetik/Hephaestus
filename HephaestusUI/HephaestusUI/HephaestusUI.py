@@ -177,6 +177,22 @@ def startClient():
 
     return clientSocket
 
+def startServer():
+    serverSocket = s.socket(s.AF_INET, s.SOCK_STREAM) # IPV4 address family, datastream connection
+    serverAddr = ('localhost', 4444) # (IP addr, port)
+    serverSocket.bind(serverAddr)
+    print("Server started on " + str(serverAddr[0]) + " on port " + str(serverAddr[1]))
+
+    return serverSocket
+
+def makeConnection(serverSocket):
+    serverSocket.listen(1) # max number of queued connections
+    print("Waiting for connection...")
+    clientSocket, clientAddr = serverSocket.accept()
+    print("\nConnection from " + str(clientAddr[0]) + " on port " + str(clientAddr[1]))
+    
+    return clientSocket
+
 
 def getTCPData(sock):
     # should have error control
@@ -419,7 +435,8 @@ def handleSelection():
 
 def main():
 
-    in_socket = startClient()
+    serverSocket = startServer()
+    clientSocket = makeConnection(serverSocket);
 
     camera_parameters = o3d.camera.PinholeCameraParameters()
 
@@ -479,7 +496,7 @@ def main():
 
     while True:
         # queue system? threading?
-        command = getTCPData(in_socket)
+        command = getTCPData(clientSocket)
 
         objectHandle = parseCommand(
             command,
@@ -491,8 +508,8 @@ def main():
             objectHandle,
         )
 
-        # vis.poll_events()
-        # vis.update_renderer()
+        vis.poll_events()
+        vis.update_renderer()
 
     vis.destroy_window()
 
