@@ -14,6 +14,10 @@ from scipy.spatial.transform import Slerp
 # Ctrl + K + C --> comment block
 #
 # ----------------------------------------------------------------------------------------
+# GLOBAL VARIABLES
+# ----------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------
 # HELPER FUNCTIONS
 # ----------------------------------------------------------------------------------------
 def convert_rotation_matrix_to_quaternion(rotation_matrix):
@@ -168,6 +172,16 @@ def smartConnect(endPoint, startPoint):
     else:
         return endPoint
 
+def smartConnectBool(endPoint, startPoint):
+    threshold = 0.1  # tune
+    if (
+        abs(endPoint[0] - startPoint[0]) < threshold
+        and abs(endPoint[1] - startPoint[1]) < threshold
+    ):
+        return True
+    else:
+        return False
+
 
 def startClient():
     # should have error control
@@ -196,7 +210,7 @@ def makeConnection(serverSocket):
 
 def getTCPData(sock):
     # should have error control
-    data = sock.recv(30)
+    data = sock.recv(40)
     readable = data.decode(encoding="ascii")
     print("Received: ", readable)
     processed = readable.strip("$")
@@ -292,6 +306,8 @@ def handleCam(subcommand, view_control, history):
 
 
 def handleNewGeo(subcommand, view_control, camera_parameters, vis, geometry_dir):
+    alphaL = 0.001 # line scaling factor (maybe better way to do this)
+
     match subcommand[0]:
         case "box":
             print("Creating new box with dimensions ___ at ___")
@@ -317,14 +333,15 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, geometry_dir)
             camera_parameters.extrinsic = current_view_matrix
             view_control.convert_from_pinhole_camera_parameters(camera_parameters, True)
         case "line":  # line handling not fully implemented yet
+            
             if subcommand[1] == "start":
-                # points = np.empty(1)
-                # lines = np.empty(1)
-                i = 2
+                pcd = o3d.geometry.PointCloud()
+                ls = o3d.geometry.LineSet()
+
                 print("Creating new line with endpoints ___ and ___")
-                coords1 = subcommand[2].strip("()").split(",")
-                coords2 = subcommand[3].strip("()").split(",")
-                points = np.array([coords1, coords2])
+                coords1 = [float(val)*alphaL for val in subcommand[2].strip("()").split(",")] + [0.0] # TODO: figure out which plane sketching on and place 0 accordingly
+                coords2 = [float(val)*alphaL for val in subcommand[3].strip("()").split(",")] + [0.0] # TODO: figure out which plane sketching on and place 0 accordingly
+                points = np.array([coords1, coords2]) 
                 lines = np.array([[0, 1]])
 
                 print(points)
@@ -337,10 +354,8 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, geometry_dir)
                     view_control.convert_to_pinhole_camera_parameters().extrinsic
                 )
 
-                pcd = o3d.geometry.PointCloud()
                 pcd.points = o3d.utility.Vector3dVector(points)
 
-                ls = o3d.geometry.LineSet()
                 ls.points = o3d.utility.Vector3dVector(points)
                 ls.lines = o3d.utility.Vector2iVector(lines)
 
@@ -351,6 +366,7 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, geometry_dir)
                 geometry_dir[lsName] = ls
                 pcdName = "pcd" + str(geometry_dir["counters"]["pcd"])
                 geometry_dir[pcdName] = pcd
+                geometry_dir["counters"]["ls"] += 1
                 geometry_dir["counters"]["pcd"] += 1
 
                 # Set back the stored view matrix
@@ -360,30 +376,38 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, geometry_dir)
                 )
 
             elif subcommand[1] == "end":
+                ls_id = "ls" + str(geometry_dir["counters"]["ls"] - 1)
+                pcd_id = "pcd" + str(geometry_dir["counters"]["pcd"] - 1)
+                ls = geometry_dir[ls_id]
+                pcd = geometry_dir[pcd_id]
                 print("Ending line")
                 # threshold for connecting closed-loop geometry
-                endPoint = smartConnect(subcommand[2].strip("()").split(","), points[0])
-
-                add_this = o3d.utilityVector3dVector(np.array([endPoint]))
-                pcd.points.extend(add_this)  # get proper references for this
-                ls.points.extend(add_this)  # get proper references for this
-                ls.lines.extend(o3d.utilityVector2iVector(np.array([[i - 1, i]])))
+                all_points = np.asarray(pcd.points).tolist()
+                print(pcd.points)
+                print(all_points)
+                if smartConnectBool(all_points[-1], all_points[0]):
+                    ls.lines.extend(o3d.utility.Vector2iVector(np.array([[len(pcd.points), 0]])))
 
                 vis.update_geometry(pcd)
                 vis.update_geometry(ls)
 
             else:
-                add_this = o3d.utilityVector3dVector(
-                    np.array([subcommand[1].strip("()").split(",")])
+                print("still sketching")
+                ls_id = "ls" + str(geometry_dir["counters"]["ls"] - 1)
+                pcd_id = "pcd" + str(geometry_dir["counters"]["pcd"] - 1)
+                ls = geometry_dir[ls_id]
+                pcd = geometry_dir[pcd_id]
+                new_points = [float(val)*alphaL for val in subcommand[1].strip("()").split(",")] + [0.0]
+                print(new_points)
+                add_this = o3d.utility.Vector3dVector(
+                    np.array([new_points])
                 )
                 pcd.points.extend(add_this)  # get proper references for this
                 ls.points.extend(add_this)  # get proper references for this
-                ls.lines.extend(o3d.utilityVector2iVector(np.array([[i - 1, i]])))
+                ls.lines.extend(o3d.utility.Vector2iVector(np.array([[len(pcd.points) - 1, len(pcd.points)]])))
 
                 vis.update_geometry(pcd)
                 vis.update_geometry(ls)
-
-                i += 1
 
 
 def handleUpdateGeo(subcommand, geometryDir, history, objectHandle):

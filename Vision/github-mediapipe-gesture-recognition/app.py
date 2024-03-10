@@ -68,7 +68,7 @@ def start_command(gesture_type, gesture_subtype, point_history):
         case ("motion", "rotate"):  # fist
             return f"motion rotate start x {point_history[-1][0]}"
         case ("create", "line"):  # pointer
-            return f"create line start {point_history[-1]}"
+            return f"create line start ({point_history[-2][0]},{point_history[-2][1]}) ({point_history[-1][0]},{point_history[-1][1]})" # from noah: i do it this way to make parsing easier on UI side
         case ("toggle", "mode"):
             return "toggle start mode  {params}"
         case ("toggle", "motion"):
@@ -91,7 +91,7 @@ def active_command(gesture_type, gesture_subtype, point_history):
         case ("motion", "rotate"):
             return f"motion rotate position {point_history[-1][0]}"
         case ("create", "line"):
-            return f"create line {point_history[-1]}"
+            return f"create line ({point_history[-1][0]},{point_history[-1][1]})"
         case ("toggle", "mode"):
             return "toggle mode"
         case ("toggle", "motion"):
