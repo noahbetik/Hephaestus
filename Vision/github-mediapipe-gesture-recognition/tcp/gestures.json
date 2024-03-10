@@ -1,7 +1,8 @@
 {
 	"2 Fingers": { "type": "motion", "subtype": "zoom" },
 	"3 Fingers": { "type": "motion", "subtype": "pan" },
-	"Pointer": { "type": "motion", "subtype": "pointer" },
+	"Fist": { "type": "motion", "subtype": "rotate" },
+	"Pointer": { "type": "create", "subtype": "line" },
 	"4 Fingers": { "type": "toggle", "subtype": "mode" },
 	"Rock on": { "type": "toggle", "subtype": "motion" },
 	"Thumbs Down": { "type": "deselect", "subtype": "None" }

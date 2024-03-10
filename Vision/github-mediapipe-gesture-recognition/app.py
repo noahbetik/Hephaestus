@@ -59,6 +59,52 @@ def get_args():
     return args
 
 
+def start_command(gesture_type, gesture_subtype, point_history):
+    match (gesture_type, gesture_subtype):
+        case ("motion", "zoom"):  # 2 fingers
+            return f"motion zoom start {point_history[-1]}"
+        case ("motion", "pan"):  # 3 fingers
+            return f"motion pan start x {point_history[-1]}"
+        case ("motion", "rotate"):  # fist
+            return f"motion rotate start x {point_history[-1]}"
+        case ("create", "line"):  # pointer
+            return f"create line start {point_history[-1]}"
+        case ("toggle", "mode"):
+            return "toggle mode start {params}"
+        case ("toggle", "motion"):
+            return "toggle motion start {params}"
+        case (
+            "deselect",
+            _,
+        ):  # Assuming any deselect action follows a generic pattern
+            return "deselect {params}"
+        case _:
+            return "Command not found"
+
+
+def active_command(gesture_type, gesture_subtype, point_history):
+    match (gesture_type, gesture_subtype):
+        case ("motion", "zoom"):
+            return f"motion zoom position {point_history[-1][0]}"
+        case ("motion", "pan"):
+            return f"motion pan start position {point_history[-1][0]}"
+        case ("motion", "rotate"):
+            return f"motion rotate position {point_history[-1][0]}"
+        case ("create", "line"):
+            return f"create line {point_history[-1]}"
+        case ("toggle", "mode"):
+            return "toggle mode start {params}"
+        case ("toggle", "motion"):
+            return "toggle motion start {params}"
+        case (
+            "deselect",
+            _,
+        ):  # Assuming any deselect action follows a generic pattern
+            return "deselect {params}"
+        case _:
+            return "Command not found"
+
+
 def main():
     # Argument parsing #################################################################
     args = get_args()
@@ -225,8 +271,13 @@ def main():
                                     "subtype"
                                 ]
                                 print(f"\nGesture: {hand_sign_name} locked in")
+
+                                gesture_start_command = start_command(
+                                    gesture_type, gesture_subtype, point_history
+                                )
+
                                 tcp_client.send_gesture(  # Send "start" command for the gesture
-                                    f"{gesture_type} {gesture_subtype} start"
+                                    gesture_start_command
                                 )
                         # If the current gesture is not the same as the last frame...
                         else:
@@ -254,69 +305,18 @@ def main():
                         elif hand_sign_id == active_gesture_id:
                             gesture_type = gesture_types[hand_sign_name]["type"]
                             gesture_subtype = gesture_types[hand_sign_name]["subtype"]
+
+                            gesture_active_command = active_command(
+                                gesture_type, gesture_subtype, point_history
+                            )
+
                             tcp_client.send_gesture(  # Send "start" command for the gesture
-                                f"{gesture_type} {gesture_subtype} active"
+                                gesture_active_command
                             )
                         else:
                             pass
 
                 previous_hand_sign_id = hand_sign_id
-
-                # Check if the current gesture is the same as the last one
-                # if confidence >= gesture_confidence_threshold:
-                #     if hand_sign_id == previous_hand_sign_id:
-                #         gesture_counter += 1  # Increment the gesture counter
-
-                #         if gesture_counter <= gesture_lock_threshold:
-                #             sys.stdout.write(
-                #                 f"\rGesture: {hand_sign_name} detected for {gesture_counter} frames, confidence = {confidence}"
-                #             )
-                #             sys.stdout.flush()
-
-                #         if (
-                #             not locked_in
-                #             and gesture_counter >= gesture_lock_threshold
-                #             and hand_sign_name != "Thumbs Down"
-                #         ):
-                #             # Only lock in and send start command once
-                #             locked_in = True
-                #             gesture_type = gesture_types[hand_sign_name]["type"]
-                #             gesture_subtype = gesture_types[hand_sign_name]["subtype"]
-                #             print(f"\nGesture: {hand_sign_name} locked in")
-                #             tcp_client.send_gesture(
-                #                 f"{gesture_type} {gesture_subtype} start"
-                #             )
-                #             print(f"{gesture_type} {gesture_subtype} start")
-                #         elif (
-                #             not locked_in
-                #             and gesture_counter >= gesture_lock_threshold
-                #             and hand_sign_name == "Thumbs Down"
-                #         ):
-                #             # Handle "thumbs down" gesture to end the motion
-                #             print(f"{gesture_type} {gesture_subtype} end")
-                #             tcp_client.send_gesture(
-                #                 f"{gesture_type} {gesture_subtype} end"
-                #             )
-                #             locked_in = False
-                #             gesture_counter = 0  # Reset the counter for new gestures
-                #     else:  # Gesture has changed
-                #         if hand_sign_name == "Thumbs Down" and locked_in:
-                #             # Handle "thumbs down" gesture to end the motion
-                #             # print(f"{gesture_type} {gesture_subtype} end")
-                #             # tcp_client.send_gesture(
-                #             # f"{gesture_type} {gesture_subtype} end"
-                #             # )
-                #             locked_in = False
-                #             gesture_counter = 0  # Reset the counter for new gestures
-                #         # else:
-                #         #     # Different gesture detected, not "thumbs down"
-                #         #     print(
-                #         #         "Different gesture detected. Waiting for 'thumbs down' to end."
-                #         #     )
-                #         #     # Optionally, add logic here to handle other gestures while locked in
-                #         #     gesture_counter = 1  # Start counting for the new gesture
-
-                #     previous_hand_sign_id = hand_sign_id
 
                 # hand_sign_id = keypoint_classifier(pre_processed_landmark_list)
                 hand_sign_id, confidence = keypoint_classifier(
@@ -353,6 +353,12 @@ def main():
         else:
             if gesture_counter > 0 or locked_in:
                 print("\nNo gesture detected. Resetting...")
+                if (
+                    gesture_type and gesture_subtype
+                ):  # Send end command in the event we lose a gesture
+                    tcp_client.send_gesture(f"{gesture_type} {gesture_subtype} end")
+                    gesture_type = None
+                    gesture_subtype = None
             point_history.append([0, 0])
             gesture_counter = 0
             previous_hand_sign_id = None
