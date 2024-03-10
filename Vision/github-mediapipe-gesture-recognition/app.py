@@ -62,17 +62,17 @@ def get_args():
 def start_command(gesture_type, gesture_subtype, point_history):
     match (gesture_type, gesture_subtype):
         case ("motion", "zoom"):  # 2 fingers
-            return f"motion zoom start {point_history[-1]}"
+            return f"motion start zoom {point_history[-1]}"
         case ("motion", "pan"):  # 3 fingers
-            return f"motion pan start x {point_history[-1]}"
+            return f"motion start pan x {point_history[-1]}"
         case ("motion", "rotate"):  # fist
-            return f"motion rotate start x {point_history[-1]}"
+            return f"motion start rotate x {point_history[-1]}"
         case ("create", "line"):  # pointer
-            return f"create line start {point_history[-1]}"
+            return f"create start line {point_history[-1]}"
         case ("toggle", "mode"):
-            return "toggle mode start {params}"
+            return "toggle start mode  {params}"
         case ("toggle", "motion"):
-            return "toggle motion start {params}"
+            return "toggle start motion {params}"
         case (
             "deselect",
             _,
@@ -85,17 +85,17 @@ def start_command(gesture_type, gesture_subtype, point_history):
 def active_command(gesture_type, gesture_subtype, point_history):
     match (gesture_type, gesture_subtype):
         case ("motion", "zoom"):
-            return f"motion zoom position {point_history[-1][0]}"
+            return f"motion position {point_history[-1][0]}"
         case ("motion", "pan"):
-            return f"motion pan start position {point_history[-1][0]}"
+            return f"motion position {point_history[-1][0]}"
         case ("motion", "rotate"):
-            return f"motion rotate position {point_history[-1][0]}"
+            return f"motion position {point_history[-1][0]}"
         case ("create", "line"):
             return f"create line {point_history[-1]}"
         case ("toggle", "mode"):
-            return "toggle mode start {params}"
+            return "toggle mode"
         case ("toggle", "motion"):
-            return "toggle motion start {params}"
+            return "toggle motion"
         case (
             "deselect",
             _,
@@ -265,7 +265,6 @@ def main():
                             if gesture_counter >= gesture_lock_threshold:
                                 locked_in = True
                                 active_gesture_id = hand_sign_id
-                                gesture_ended = False
                                 gesture_type = gesture_types[hand_sign_name]["type"]
                                 gesture_subtype = gesture_types[hand_sign_name][
                                     "subtype"
@@ -279,6 +278,14 @@ def main():
                                 tcp_client.send_gesture(  # Send "start" command for the gesture
                                     gesture_start_command
                                 )
+
+                                if (
+                                    gesture_type == "toggle"
+                                    or gesture_type == "deselect"
+                                ):
+                                    locked_in = False
+                                    gesture_counter = 0
+                                    active_gesture_id = None
                         # If the current gesture is not the same as the last frame...
                         else:
                             gesture_counter = 0  # Reset counter
