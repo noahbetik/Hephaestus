@@ -70,9 +70,13 @@ def start_command(gesture_type, gesture_subtype, point_history):
         case ("create", "line"):  # pointer
             return f"create line start ({point_history[-2][0]},{point_history[-2][1]}) ({point_history[-1][0]},{point_history[-1][1]})"  # from noah: i do it this way to make parsing easier on UI side
         case ("toggle", "mode"):
-            return "toggle start mode  {params}"
+            return "toggle mode"
         case ("toggle", "motion"):
-            return "toggle start motion {params}"
+            return "toggle motion"
+        case ("snap", "right"):
+            return "snap right"
+        case ("snap", "left"):
+            return "snap left"
         case (
             "deselect",
             _,
@@ -95,7 +99,13 @@ def active_command(gesture_type, gesture_subtype, point_history):
         case ("toggle", "mode"):
             return "toggle mode"
         case ("toggle", "motion"):
-            return "toggle motion"
+            return ""
+        case ("snap", "None"):
+            return ""
+        case ("snap_righthand", "None"):
+            return ""
+        case ("snap_lefthand", "None"):
+            return ""
         case (
             "deselect",
             _,
@@ -282,6 +292,7 @@ def main():
                                 if (
                                     gesture_type == "toggle"
                                     or gesture_type == "deselect"
+                                    or gesture_type == "snap"
                                 ):
                                     locked_in = False
                                     gesture_counter = 0

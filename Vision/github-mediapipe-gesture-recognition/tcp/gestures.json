@@ -5,5 +5,7 @@
 	"Pointer": { "type": "create", "subtype": "line" },
 	"4 Fingers": { "type": "toggle", "subtype": "mode" },
 	"Rock on": { "type": "toggle", "subtype": "motion" },
-	"Thumbs Down": { "type": "deselect", "subtype": "None" }
+	"Thumbs Down": { "type": "deselect", "subtype": "None" },
+	"L_RightHand": { "type": "snap", "subtype": "right" },
+	"L_LeftHand": { "type": "snap", "subtype": "left" }
 }
