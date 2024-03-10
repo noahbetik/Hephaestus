@@ -253,14 +253,14 @@ def handleCam(subcommand, view_control, history):
 
     # history: {operation:operation, axis:axis, lastVal:lastVal}
 
-    alphaM = 1  # translation scaling factor
+    alphaM = 0.01  # translation scaling factor
     alphaR = 1  # rotation scaling factor
-    alphaZ = 0.1  # zoom scaling factor
+    alphaZ = 0.01  # zoom scaling factor
 
-    match subcommand[0]:
+    match subcommand[1]:
         case "start":
             print("starting motion")
-            history["operation"] = subcommand[1]
+            history["operation"] = subcommand[0] # in theory don't need to store this anymore since optype sent each update
             if history["operation"] == "zoom":
                 history["lastVal"] = subcommand[2]
             else:
@@ -276,17 +276,17 @@ def handleCam(subcommand, view_control, history):
             match history["operation"]:
                 case "pan":
                     print("camera pan update")
-                    delta = float(subcommand[1]) - float(history["lastVal"])
+                    delta = float(subcommand[2]) - float(history["lastVal"])
                     move_camera_v2(view_control, history["axis"], delta * alphaM)
                 case "rotate":
                     print("camera rotate update")
-                    delta = float(subcommand[1]) - float(history["lastVal"])
+                    delta = float(subcommand[2]) - float(history["lastVal"])
                     rotate_camera(view_control, history["axis"], degrees=delta * alphaR)
                 case "zoom":
                     print("camera zoom update")
-                    delta = float(subcommand[1]) - float(history["lastVal"])
+                    delta = float(subcommand[2]) - float(history["lastVal"])
                     move_camera_v2(view_control, "x", delta * alphaZ)
-            history["lastVal"] = subcommand[1]
+            history["lastVal"] = subcommand[2]
         case _:
             print("INVALID COMMAND")
 
@@ -316,7 +316,7 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, geometry_dir)
             # Set back the stored view matrix
             camera_parameters.extrinsic = current_view_matrix
             view_control.convert_from_pinhole_camera_parameters(camera_parameters, True)
-        case "line":  # line handling not implemented yet
+        case "line":  # line handling not fully implemented yet
             if subcommand[1] == "start":
                 # points = np.empty(1)
                 # lines = np.empty(1)

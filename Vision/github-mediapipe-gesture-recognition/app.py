@@ -62,13 +62,13 @@ def get_args():
 def start_command(gesture_type, gesture_subtype, point_history):
     match (gesture_type, gesture_subtype):
         case ("motion", "zoom"):  # 2 fingers
-            return f"motion start zoom {point_history[-1][0]}"
+            return f"motion zoom start {point_history[-1][0]}"
         case ("motion", "pan"):  # 3 fingers
-            return f"motion start pan z {point_history[-1][0]}"
+            return f"motion pan start z {point_history[-1][0]}"
         case ("motion", "rotate"):  # fist
-            return f"motion start rotate x {point_history[-1][0]}"
+            return f"motion rotate start x {point_history[-1][0]}"
         case ("create", "line"):  # pointer
-            return f"create start line {point_history[-1]}"
+            return f"create line start {point_history[-1]}"
         case ("toggle", "mode"):
             return "toggle start mode  {params}"
         case ("toggle", "motion"):
@@ -85,11 +85,11 @@ def start_command(gesture_type, gesture_subtype, point_history):
 def active_command(gesture_type, gesture_subtype, point_history):
     match (gesture_type, gesture_subtype):
         case ("motion", "zoom"):
-            return f"motion position {point_history[-1][0]}"
+            return f"motion zoom position {point_history[-1][0]}"
         case ("motion", "pan"):
-            return f"motion position {point_history[-1][0]}"
+            return f"motion pan position {point_history[-1][0]}"
         case ("motion", "rotate"):
-            return f"motion position {point_history[-1][0]}"
+            return f"motion rotate position {point_history[-1][0]}"
         case ("create", "line"):
             return f"create line {point_history[-1]}"
         case ("toggle", "mode"):
