@@ -7,5 +7,6 @@
 	"Rock on": { "type": "toggle", "subtype": "motion" },
 	"Thumbs Down": { "type": "deselect", "subtype": "None" },
 	"L_RightHand": { "type": "snap", "subtype": "right" },
-	"L_LeftHand": { "type": "snap", "subtype": "left" }
+	"L_LeftHand": { "type": "snap", "subtype": "left" },
+	"Thumbs Up": { "type": "select", "subtype": "None" }
 }
