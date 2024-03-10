@@ -85,7 +85,7 @@ def start_command(gesture_type, gesture_subtype, point_history):
 def active_command(gesture_type, gesture_subtype, point_history):
     match (gesture_type, gesture_subtype):
         case ("motion", "zoom"):
-            return f"motion zoom position {point_history[-1][0]}"
+            return f"motion zoom position {point_history[-1][0], point_history[-1][1]}"
         case ("motion", "pan"):
             return f"motion pan position {point_history[-1][0]}"
         case ("motion", "rotate"):
@@ -177,7 +177,7 @@ def main():
     mode = 0
 
     gesture_counter = 0
-    gesture_lock_threshold = 30  # Number of frames to confirm gesture lock
+    gesture_lock_threshold = 20  # Number of frames to confirm gesture lock
     gesture_confidence_threshold = 0.65  # Confidence level to be valid
     locked_in = False
     previous_hand_sign_id = None
