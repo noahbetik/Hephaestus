@@ -360,12 +360,12 @@ def main():
         else:
             if gesture_counter > 0 or locked_in:
                 print("\nNo gesture detected. Resetting...")
-                if (
-                    gesture_type and gesture_subtype
-                ):  # Send end command in the event we lose a gesture
-                    tcp_client.send_gesture(f"{gesture_type} {gesture_subtype} end")
-                    gesture_type = None
-                    gesture_subtype = None
+                # if (
+                #     gesture_type and gesture_subtype
+                # ):  # Send end command in the event we lose a gesture
+                #     tcp_client.send_gesture(f"{gesture_type} {gesture_subtype} end")
+                #     gesture_type = None
+                #     gesture_subtype = None
             point_history.append([0, 0])
             gesture_counter = 0
             previous_hand_sign_id = None
