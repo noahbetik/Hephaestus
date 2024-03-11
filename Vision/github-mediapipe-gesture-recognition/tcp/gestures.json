@@ -8,5 +8,7 @@
 	"Thumbs Down": { "type": "deselect", "subtype": "None" },
 	"L_RightHand": { "type": "snap", "subtype": "right" },
 	"L_LeftHand": { "type": "snap", "subtype": "left" },
-	"Thumbs Up": { "type": "select", "subtype": "None" }
+	"Thumbs Up": { "type": "select", "subtype": "None" },
+	"Illuminati_LeftHand": { "type": "snap_iso", "subtype": "left" },
+	"Illuminati_RightHand": { "type": "snap_iso", "subtype": "right" }
 }

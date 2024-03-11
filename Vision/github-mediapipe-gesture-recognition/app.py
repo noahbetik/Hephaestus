@@ -398,9 +398,10 @@ def select_mode(key, mode):
     number = -1
     if 48 <= key <= 57:  # 0 ~ 9
         number = key - 48
-    elif key == 113:   #using q for 10
-        print("learning gesture 10")
+    elif key == 113:   #using q for 10   
         number = 10
+    elif key == 119: #using w for 11
+        number = 11
     if key == 110:  # n
         mode = 0
     if key == 107:  # k
@@ -497,7 +498,7 @@ def pre_process_point_history(image, point_history):
 def logging_csv(number, mode, landmark_list, point_history_list):
     if mode == 0:
         pass
-    if mode == 1 and (0 <= number <= 10):
+    if mode == 1 and (0 <= number <= 11):
         csv_path = "model/keypoint_classifier/keypoint.csv"
         with open(csv_path, "a", newline="") as f:
             writer = csv.writer(f)
@@ -957,7 +958,7 @@ def draw_info(image, fps, mode, number):
             1,
             cv.LINE_AA,
         )
-        if 0 <= number <= 10: 
+        if 0 <= number <= 11: 
             cv.putText(
                 image,
                 "NUM:" + str(number),
