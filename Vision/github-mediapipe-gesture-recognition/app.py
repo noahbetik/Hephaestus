@@ -402,6 +402,10 @@ def select_mode(key, mode):
         number = 10
     elif key == 119: #using w for 11
         number = 11
+    elif key == 101: #using e for 12
+        number = 12
+    elif key == 114: #using r for 13
+        number = 13
     if key == 110:  # n
         mode = 0
     if key == 107:  # k
@@ -498,7 +502,7 @@ def pre_process_point_history(image, point_history):
 def logging_csv(number, mode, landmark_list, point_history_list):
     if mode == 0:
         pass
-    if mode == 1 and (0 <= number <= 11):
+    if mode == 1 and (0 <= number <= 13):
         csv_path = "model/keypoint_classifier/keypoint.csv"
         with open(csv_path, "a", newline="") as f:
             writer = csv.writer(f)
@@ -958,7 +962,7 @@ def draw_info(image, fps, mode, number):
             1,
             cv.LINE_AA,
         )
-        if 0 <= number <= 11: 
+        if 0 <= number <= 13: 
             cv.putText(
                 image,
                 "NUM:" + str(number),
