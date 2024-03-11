@@ -114,7 +114,17 @@ def move_camera_v2(view_control, direction, amount=1.5):
     elif direction == "z":
         extrinsic[1, 3] += amount
 
-    print(extrinsic[0, 3])
+    cam_params.extrinsic = extrinsic
+    view_control.convert_from_pinhole_camera_parameters(cam_params, True)
+
+
+def move_camera_v3(view_control, vals):
+    cam_params = view_control.convert_to_pinhole_camera_parameters()
+    extrinsic = np.array(cam_params.extrinsic)
+
+    # x axis handled by zoom
+    extrinsic[0, 3] += vals[0] # y axis
+    extrinsic[1, 3] += vals[1] # z axis
 
     cam_params.extrinsic = extrinsic
     view_control.convert_from_pinhole_camera_parameters(cam_params, True)
@@ -275,7 +285,7 @@ def handleCam(subcommand, view_control, history):
         case "start":
             print("starting motion")
             history["operation"] = subcommand[0] # in theory don't need to store this anymore since optype sent each update
-            if history["operation"] == "zoom":
+            if history["operation"] != "rotate":
                 history["lastVal"] = subcommand[2]
             else:
                 history["axis"] = subcommand[2]
@@ -290,8 +300,14 @@ def handleCam(subcommand, view_control, history):
             match history["operation"]:
                 case "pan":
                     print("camera pan update")
-                    delta = float(subcommand[2]) - float(history["lastVal"])
-                    move_camera_v2(view_control, history["axis"], delta * alphaM)
+                    splitCoords = subcommand[2].strip("()").split(",")
+                    oldCoords = history["lastVal"].strip("()").split(",")
+                    deltaY = (float(splitCoords[0]) - float(oldCoords[0])) * alphaM
+                    deltaZ = (float(splitCoords[1]) - float(oldCoords[1])) * alphaM
+                    move_camera_v3(view_control, [deltaY, deltaZ])
+
+                    #delta = float(subcommand[2]) - float(history["lastVal"])
+                    #move_camera_v2(view_control, history["axis"], delta * alphaM)
                 case "rotate":
                     print("camera rotate update")
                     delta = float(subcommand[2]) - float(history["lastVal"])
