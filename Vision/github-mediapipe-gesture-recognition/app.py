@@ -122,287 +122,6 @@ def active_command(gesture_type, gesture_subtype, point_history):
         case _:
             return "Command not found"
 
-
-def main():
-    # Argument parsing #################################################################
-    args = get_args()
-
-    cap_device = args.device
-    cap_width = args.width
-    cap_height = args.height
-
-    use_static_image_mode = args.use_static_image_mode
-    min_detection_confidence = args.min_detection_confidence
-    min_tracking_confidence = args.min_tracking_confidence
-
-    use_brect = True
-
-    # Initialize and connect the TCP client
-    tcp_client = TCPClient(
-        host="localhost", port=4444
-    )  # Adjust host and port if needed
-    tcp_client.connect()
-
-    # Camera preparation ###############################################################
-    cap = cv.VideoCapture(cap_device)
-    # Replace with the same PORT used in the ffmpeg command
-    # stream_url = 'udp://@:444'
-
-    # cap = cv.VideoCapture(stream_url)
-    cap.set(cv.CAP_PROP_FRAME_WIDTH, cap_width)
-    cap.set(cv.CAP_PROP_FRAME_HEIGHT, cap_height)
-
-    # Model load #############################################################
-    mp_hands = mp.solutions.hands  # initialize mediapipe's hand solution
-    hands = mp_hands.Hands(
-        static_image_mode=use_static_image_mode,  # treats each image as static, better to set as True if not a video stream
-        max_num_hands=2,  # set 1 or 2 hands
-        min_detection_confidence=min_detection_confidence,  # minimum values, lower = easier to detect but more false positives
-        min_tracking_confidence=min_tracking_confidence,
-    )
-
-    # Instantiate objects for key point and point history classifier
-    keypoint_classifier = KeyPointClassifier()
-    point_history_classifier = PointHistoryClassifier()
-
-    # Read labels ###########################################################
-    # Opens CSV files with labels for classification
-    with open(
-        "model/keypoint_classifier/keypoint_classifier_label.csv", encoding="utf-8-sig"
-    ) as f:
-        keypoint_classifier_labels = csv.reader(f)
-        keypoint_classifier_labels = [row[0] for row in keypoint_classifier_labels]
-    with open(
-        "model/point_history_classifier/point_history_classifier_label.csv",
-        encoding="utf-8-sig",
-    ) as f:
-        point_history_classifier_labels = csv.reader(f)
-        point_history_classifier_labels = [
-            row[0] for row in point_history_classifier_labels
-        ]
-
-    # FPS Measurement ########################################################
-    cvFpsCalc = CvFpsCalc(buffer_len=10)  # use last 10 buffers to calculate fps
-
-    # Coordinate history #################################################################
-    history_length = 16  # max length
-    point_history = deque(maxlen=history_length)  # double ended queue
-
-    # Finger gesture history ################################################
-    finger_gesture_history = deque(maxlen=history_length)
-
-    #  ########################################################################
-    mode = 0
-
-    gesture_counter = 0
-    gesture_lock_threshold = 20  # Number of frames to confirm gesture lock
-    gesture_confidence_threshold = 0.65  # Confidence level to be valid
-    locked_in = False
-    previous_hand_sign_id = None
-    active_gesture_id = None
-    motion_started = False
-    gesture_ended = None
-    hand_sign_name = "No Gesture"
-
-    # Get gesture types
-    gesture_types = load_gesture_definitions("./tcp/gestures.json")
-
-    while True:
-        fps = cvFpsCalc.get()
-
-        # Process Key (ESC: end) #################################################
-        key = cv.waitKey(10)
-        if key == 27:  # ESC
-            break
-        number, mode = select_mode(key, mode)
-
-        # Camera capture #####################################################
-        ret, image = cap.read()
-        if not ret:
-            break
-        image = cv.flip(image, 1)  # Mirror display
-        debug_image = copy.deepcopy(image)
-
-        # Detection implementation #############################################################
-        image = cv.cvtColor(image, cv.COLOR_BGR2RGB)
-
-        image.flags.writeable = False  # set to read only
-        results = hands.process(
-            image
-        )  # mediapipe processing, results holds detected hand landmarks
-        image.flags.writeable = True
-
-        #  ####################################################################
-        if results.multi_hand_landmarks is not None:
-            for hand_landmarks, handedness in zip(
-                results.multi_hand_landmarks, results.multi_handedness
-            ):
-                # Bounding box calculation
-                brect = calc_bounding_rect(debug_image, hand_landmarks)
-                # Landmark calculation
-                landmark_list = calc_landmark_list(debug_image, hand_landmarks)
-
-                # Conversion to relative coordinates / normalized coordinates
-                pre_processed_landmark_list = pre_process_landmark(landmark_list)
-                pre_processed_point_history_list = pre_process_point_history(
-                    debug_image, point_history
-                )
-                # Write to the dataset file
-                logging_csv(
-                    number,
-                    mode,
-                    pre_processed_landmark_list,
-                    pre_processed_point_history_list,
-                )
-
-                # Hand sign classification
-                # hand_sign_id = keypoint_classifier(pre_processed_landmark_list)
-                hand_sign_id, confidence = keypoint_classifier(
-                    pre_processed_landmark_list
-                )
-
-                if hand_sign_id == 1 or 4:  # Point gesture
-                    point_history.append(landmark_list[8])
-                else:
-                    point_history.append([0, 0])
-
-                # If confidence is high enough..
-                if confidence >= gesture_confidence_threshold:
-                    # If we're not locked in yet...
-                    if not locked_in:
-                        # If the current gesture detected is the same as the last frame...
-                        if hand_sign_id == previous_hand_sign_id and hand_sign_id != 5:
-                            gesture_counter += 1  # Increment gesture counter
-
-                            sys.stdout.write(
-                                f"\rGesture: {hand_sign_name}, Frames: {gesture_counter}, Confidence: {confidence:.5f}"
-                            )
-                            sys.stdout.flush()
-
-                            # If we reach the threshold for a gesture, lock in
-                            if gesture_counter >= gesture_lock_threshold:
-                                locked_in = True
-                                active_gesture_id = hand_sign_id
-                                gesture_type = gesture_types[hand_sign_name]["type"]
-                                gesture_subtype = gesture_types[hand_sign_name][
-                                    "subtype"
-                                ]
-                                print(f"\nGesture: {hand_sign_name} locked in")
-
-                                gesture_start_command = start_command(
-                                    gesture_type, gesture_subtype, point_history
-                                )
-
-                                tcp_client.send_gesture(  # Send "start" command for the gesture
-                                    gesture_start_command
-                                )
-
-                                if (
-                                    gesture_type == "toggle"
-                                    or gesture_type == "deselect"
-                                    or gesture_type == "snap"
-                                    or gesture_type == "snap_iso"
-                                ):
-                                    locked_in = False
-                                    gesture_counter = 0
-                                    active_gesture_id = None
-                        # If the current gesture is not the same as the last frame...
-                        else:
-                            gesture_counter = 0  # Reset counter
-                    else:
-                        # If it's the thumbs down gesture...
-                        if hand_sign_id == 5:
-                            if hand_sign_id == previous_hand_sign_id:
-                                gesture_counter += 1
-
-                                sys.stdout.write(
-                                    f"\rGesture: {hand_sign_name}, Frames: {gesture_counter}, Confidence: {confidence:.5f}"
-                                )
-                                sys.stdout.flush()
-                                if gesture_counter >= gesture_lock_threshold:
-                                    print()
-                                    tcp_client.send_gesture(
-                                        f"{gesture_type} {gesture_subtype} end"
-                                    )
-                                    locked_in = False
-                                    gesture_counter = 0
-                                    active_gesture_id = None
-                            else:
-                                gesture_counter = 1
-                        elif hand_sign_id == active_gesture_id:
-                            gesture_type = gesture_types[hand_sign_name]["type"]
-                            gesture_subtype = gesture_types[hand_sign_name]["subtype"]
-
-                            gesture_active_command = active_command(
-                                gesture_type, gesture_subtype, point_history
-                            )
-
-                            tcp_client.send_gesture(  # Send "start" command for the gesture
-                                gesture_active_command
-                            )
-                        else:
-                            pass
-
-                previous_hand_sign_id = hand_sign_id
-
-                # hand_sign_id = keypoint_classifier(pre_processed_landmark_list)
-                hand_sign_id, confidence = keypoint_classifier(
-                    pre_processed_landmark_list
-                )
-                hand_sign_name = keypoint_classifier_labels[hand_sign_id]
-
-                # Finger gesture classification
-                finger_gesture_id = 0
-                point_history_len = len(pre_processed_point_history_list)
-                if point_history_len == (history_length * 2):
-                    finger_gesture_id = point_history_classifier(
-                        pre_processed_point_history_list
-                    )
-
-                # Calculates the gesture IDs in the latest detection
-                finger_gesture_history.append(finger_gesture_id)
-                most_common_fg_id = Counter(finger_gesture_history).most_common()
-
-                finger_gesture_name = point_history_classifier_labels[
-                    most_common_fg_id[0][0]
-                ]
-
-                # Drawing part
-                debug_image = draw_bounding_rect(use_brect, debug_image, brect)
-                debug_image = draw_landmarks(debug_image, landmark_list)
-                debug_image = draw_info_text(
-                    debug_image,
-                    brect,
-                    handedness,
-                    keypoint_classifier_labels[hand_sign_id],
-                    point_history_classifier_labels[most_common_fg_id[0][0]],
-                )
-        else:
-            if gesture_counter > 0 or locked_in:
-                print("\nNo gesture detected. Resetting...")
-                # if (
-                #     gesture_type and gesture_subtype
-                # ):  # Send end command in the event we lose a gesture
-                #     tcp_client.send_gesture(f"{gesture_type} {gesture_subtype} end")
-                #     gesture_type = None
-                #     gesture_subtype = None
-            point_history.append([0, 0])
-            gesture_counter = 0
-            previous_hand_sign_id = None
-            locked_in = False
-
-        # debug_image = draw_point_history(debug_image, point_history)
-        debug_image = draw_current_pointer_coordinates(debug_image, point_history)
-        debug_image = draw_info(debug_image, fps, mode, number)
-
-        # Screen reflection #############################################################
-        cv.imshow("Hand Gesture Recognition", debug_image)
-
-    tcp_client.close()
-    cap.release()
-    cv.destroyAllWindows()
-
-
 def select_mode(key, mode):
     number = -1
     if 48 <= key <= 57:  # 0 ~ 9
@@ -411,9 +130,9 @@ def select_mode(key, mode):
         number = 10
     elif key == 119: #using w for 11
         number = 11
-    elif key == 101: #using e for 12
+    elif key == 101: #using e for 12  UNUSED CURRENTLY
         number = 12
-    elif key == 114: #using r for 13
+    elif key == 114: #using r for 13  UNUSED CURRENTLY
         number = 13
     if key == 110:  # n
         mode = 0
@@ -984,6 +703,287 @@ def draw_info(image, fps, mode, number):
             )
     return image
 
+def main():
+    # Argument parsing #################################################################
+    args = get_args()
+
+    cap_device = args.device
+    cap_width = args.width
+    cap_height = args.height
+
+    use_static_image_mode = args.use_static_image_mode
+    min_detection_confidence = args.min_detection_confidence
+    min_tracking_confidence = args.min_tracking_confidence
+
+    use_brect = True
+
+    # Initialize and connect the TCP client
+    tcp_client = TCPClient(
+        host="localhost", port=4445
+    )  # Adjust host and port if needed
+    tcp_client.connect()
+
+    # Camera preparation ###############################################################
+    cap = cv.VideoCapture(cap_device)
+    # Replace with the same PORT used in the ffmpeg command
+    # stream_url = 'udp://@:444'
+
+    # cap = cv.VideoCapture(stream_url)
+    cap.set(cv.CAP_PROP_FRAME_WIDTH, cap_width)
+    cap.set(cv.CAP_PROP_FRAME_HEIGHT, cap_height)
+
+    # Model load #############################################################
+    mp_hands = mp.solutions.hands  # initialize mediapipe's hand solution
+    hands = mp_hands.Hands(
+        static_image_mode=use_static_image_mode,  # treats each image as static, better to set as True if not a video stream
+        max_num_hands=2,  # set 1 or 2 hands
+        min_detection_confidence=min_detection_confidence,  # minimum values, lower = easier to detect but more false positives
+        min_tracking_confidence=min_tracking_confidence,
+    )
+
+    # Instantiate objects for key point and point history classifier
+    keypoint_classifier = KeyPointClassifier()
+    point_history_classifier = PointHistoryClassifier()
+
+    # Read labels ###########################################################
+    # Opens CSV files with labels for classification
+    with open(
+        "model/keypoint_classifier/keypoint_classifier_label.csv", encoding="utf-8-sig"
+    ) as f:
+        keypoint_classifier_labels = csv.reader(f)
+        keypoint_classifier_labels = [row[0] for row in keypoint_classifier_labels]
+    with open(
+        "model/point_history_classifier/point_history_classifier_label.csv",
+        encoding="utf-8-sig",
+    ) as f:
+        point_history_classifier_labels = csv.reader(f)
+        point_history_classifier_labels = [
+            row[0] for row in point_history_classifier_labels
+        ]
+
+    # FPS Measurement ########################################################
+    cvFpsCalc = CvFpsCalc(buffer_len=10)  # use last 10 buffers to calculate fps
+
+    # Coordinate history #################################################################
+    history_length = 16  # max length
+    point_history = deque(maxlen=history_length)  # double ended queue
+
+    # Finger gesture history ################################################
+    finger_gesture_history = deque(maxlen=history_length)
+
+    #  ########################################################################
+    mode = 0
+
+    gesture_counter = 0
+    gesture_lock_threshold = 20  # Number of frames to confirm gesture lock
+    gesture_confidence_threshold = 0.65  # Confidence level to be valid
+    locked_in = False
+    previous_hand_sign_id = None
+    active_gesture_id = None
+    motion_started = False
+    gesture_ended = None
+    hand_sign_name = "No Gesture"
+    
+    dual_gesture_detected = False  #Used to detect a dual gesture
+
+    # Get gesture types
+    gesture_types = load_gesture_definitions("./tcp/gestures.json")
+
+    while True:
+        fps = cvFpsCalc.get()
+
+        # Process Key (ESC: end) #################################################
+        key = cv.waitKey(10)
+        if key == 27:  # ESC
+            break
+        number, mode = select_mode(key, mode)
+
+        # Camera capture #####################################################
+        ret, image = cap.read()
+        if not ret:
+            break
+        image = cv.flip(image, 1)  # Mirror display
+        debug_image = copy.deepcopy(image)
+
+        # Detection implementation #############################################################
+        image = cv.cvtColor(image, cv.COLOR_BGR2RGB)
+
+        image.flags.writeable = False  # set to read only
+        results = hands.process(
+            image
+        )  # mediapipe processing, results holds detected hand landmarks
+        image.flags.writeable = True
+
+        #  ####################################################################
+        if results.multi_hand_landmarks is not None:
+            for hand_landmarks, handedness in zip(
+                results.multi_hand_landmarks, results.multi_handedness
+            ):
+                # Bounding box calculation
+                brect = calc_bounding_rect(debug_image, hand_landmarks)
+                # Landmark calculation
+                landmark_list = calc_landmark_list(debug_image, hand_landmarks)
+
+                # Conversion to relative coordinates / normalized coordinates
+                pre_processed_landmark_list = pre_process_landmark(landmark_list)
+                pre_processed_point_history_list = pre_process_point_history(
+                    debug_image, point_history
+                )
+                # Write to the dataset file
+                logging_csv(
+                    number,
+                    mode,
+                    pre_processed_landmark_list,
+                    pre_processed_point_history_list,
+                )
+
+                # Hand sign classification
+                # hand_sign_id = keypoint_classifier(pre_processed_landmark_list)
+                hand_sign_id, confidence = keypoint_classifier(
+                    pre_processed_landmark_list
+                )
+
+                if hand_sign_id == 1 or 4:  # Point gesture
+                    point_history.append(landmark_list[8])
+                else:
+                    point_history.append([0, 0])
+
+                # If confidence is high enough..
+                if confidence >= gesture_confidence_threshold:
+                    # If we're not locked in yet...
+                    if not locked_in:
+                        # If the current gesture detected is the same as the last frame...
+                        if hand_sign_id == previous_hand_sign_id and hand_sign_id != 5:
+                            gesture_counter += 1  # Increment gesture counter
+
+                            sys.stdout.write(
+                                f"\rGesture: {hand_sign_name}, Frames: {gesture_counter}, Confidence: {confidence:.5f}"
+                            )
+                            sys.stdout.flush()
+
+                            # If we reach the threshold for a gesture, lock in
+                            if gesture_counter >= gesture_lock_threshold:
+                                locked_in = True
+                                active_gesture_id = hand_sign_id
+                                gesture_type = gesture_types[hand_sign_name]["type"]
+                                gesture_subtype = gesture_types[hand_sign_name][
+                                    "subtype"
+                                ]
+                                print(f"\nGesture: {hand_sign_name} locked in")
+
+                                gesture_start_command = start_command(
+                                    gesture_type, gesture_subtype, point_history
+                                )
+
+                                tcp_client.send_gesture(  # Send "start" command for the gesture
+                                    gesture_start_command
+                                )
+
+                                if (
+                                    gesture_type == "toggle"
+                                    or gesture_type == "deselect"
+                                    or gesture_type == "snap"
+                                    or gesture_type == "snap_iso"
+                                ):
+                                    locked_in = False
+                                    gesture_counter = 0
+                                    active_gesture_id = None
+                        # If the current gesture is not the same as the last frame...
+                        else:
+                            gesture_counter = 0  # Reset counter
+                    else:
+                        # If it's the thumbs down gesture...
+                        if hand_sign_id == 5:
+                            if hand_sign_id == previous_hand_sign_id:
+                                gesture_counter += 1
+
+                                sys.stdout.write(
+                                    f"\rGesture: {hand_sign_name}, Frames: {gesture_counter}, Confidence: {confidence:.5f}"
+                                )
+                                sys.stdout.flush()
+                                if gesture_counter >= gesture_lock_threshold:
+                                    print()
+                                    tcp_client.send_gesture(
+                                        f"{gesture_type} {gesture_subtype} end"
+                                    )
+                                    locked_in = False
+                                    gesture_counter = 0
+                                    active_gesture_id = None
+                            else:
+                                gesture_counter = 1
+                        elif hand_sign_id == active_gesture_id:
+                            gesture_type = gesture_types[hand_sign_name]["type"]
+                            gesture_subtype = gesture_types[hand_sign_name]["subtype"]
+
+                            gesture_active_command = active_command(
+                                gesture_type, gesture_subtype, point_history
+                            )
+
+                            tcp_client.send_gesture(  # Send "start" command for the gesture
+                                gesture_active_command
+                            )
+                        else:
+                            pass
+
+                previous_hand_sign_id = hand_sign_id
+
+                # hand_sign_id = keypoint_classifier(pre_processed_landmark_list)
+                hand_sign_id, confidence = keypoint_classifier(
+                    pre_processed_landmark_list
+                )
+                hand_sign_name = keypoint_classifier_labels[hand_sign_id]
+
+                # Finger gesture classification
+                finger_gesture_id = 0
+                point_history_len = len(pre_processed_point_history_list)
+                if point_history_len == (history_length * 2):
+                    finger_gesture_id = point_history_classifier(
+                        pre_processed_point_history_list
+                    )
+
+                # Calculates the gesture IDs in the latest detection
+                finger_gesture_history.append(finger_gesture_id)
+                most_common_fg_id = Counter(finger_gesture_history).most_common()
+
+                finger_gesture_name = point_history_classifier_labels[
+                    most_common_fg_id[0][0]
+                ]
+
+                # Drawing part
+                debug_image = draw_bounding_rect(use_brect, debug_image, brect)
+                debug_image = draw_landmarks(debug_image, landmark_list)
+                debug_image = draw_info_text(
+                    debug_image,
+                    brect,
+                    handedness,
+                    keypoint_classifier_labels[hand_sign_id],
+                    point_history_classifier_labels[most_common_fg_id[0][0]],
+                )
+        else:
+            if gesture_counter > 0 or locked_in:
+                print("\nNo gesture detected. Resetting...")
+                # if (
+                #     gesture_type and gesture_subtype
+                # ):  # Send end command in the event we lose a gesture
+                #     tcp_client.send_gesture(f"{gesture_type} {gesture_subtype} end")
+                #     gesture_type = None
+                #     gesture_subtype = None
+            point_history.append([0, 0])
+            gesture_counter = 0
+            previous_hand_sign_id = None
+            locked_in = False
+
+        # debug_image = draw_point_history(debug_image, point_history)
+        debug_image = draw_current_pointer_coordinates(debug_image, point_history)
+        debug_image = draw_info(debug_image, fps, mode, number)
+
+        # Screen reflection #############################################################
+        cv.imshow("Hand Gesture Recognition", debug_image)
+
+    tcp_client.close()
+    cap.release()
+    cv.destroyAllWindows()
+    
 
 if __name__ == "__main__":
     main()
