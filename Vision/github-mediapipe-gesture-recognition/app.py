@@ -783,8 +783,6 @@ def main():
     motion_started = False
     gesture_ended = None
     hand_sign_name = "No Gesture"
-    
-    dual_gesture_detected = False  #Used to detect a dual gesture
 
     # Get gesture types
     gesture_types = load_gesture_definitions("./tcp/gestures.json")
@@ -814,11 +812,16 @@ def main():
         )  # mediapipe processing, results holds detected hand landmarks
         image.flags.writeable = True
 
+        left_hand_gesture_id = None
+        right_hand_gesture_id = None
+        dual_gesture_detected = False  #Used to detect a dual gesture
         #  ####################################################################
         if results.multi_hand_landmarks is not None:
             for hand_landmarks, handedness in zip(
                 results.multi_hand_landmarks, results.multi_handedness
             ):
+                hand_label = handedness.classification[0].label # Right or left
+                #print(hand_label)
                 # Bounding box calculation
                 brect = calc_bounding_rect(debug_image, hand_landmarks)
                 # Landmark calculation
@@ -829,6 +832,27 @@ def main():
                 pre_processed_point_history_list = pre_process_point_history(
                     debug_image, point_history
                 )
+                
+                hand_sign_id, _  = keypoint_classifier(pre_processed_landmark_list)
+                
+                #Assign gesture ID based on hand label
+                if hand_label == 'Left':
+                    left_hand_gesture_id = hand_sign_id
+                elif hand_label == 'Right':
+                    right_hand_gesture_id = hand_sign_id
+                
+                # After processing both hands, check for dual gesture
+                if left_hand_gesture_id is not None and right_hand_gesture_id is not None:
+                    if (left_hand_gesture_id, right_hand_gesture_id) == (1, 6): #or (left_hand_gesture_id, right_hand_gesture_id) == (2, 1):
+                        print("Dual gesture detected: One finger and a fist")
+                        dual_gesture_detected = True
+                    elif (left_hand_gesture_id, right_hand_gesture_id) == (2, 6): #or (left_hand_gesture_id, right_hand_gesture_id) == (2, 1):
+                        print("Dual gesture detected: Two fingers and a fist")
+                        dual_gesture_detected = True
+                    elif (left_hand_gesture_id, right_hand_gesture_id) == (4, 6): #or (left_hand_gesture_id, right_hand_gesture_id) == (2, 1):
+                        print("Dual gesture detected: Three fingers and a fist")
+                        dual_gesture_detected = True
+        
                 # Write to the dataset file
                 logging_csv(
                     number,
