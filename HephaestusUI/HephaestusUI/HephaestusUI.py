@@ -20,6 +20,60 @@ from scipy.spatial.transform import Slerp
 # ----------------------------------------------------------------------------------------
 # HELPER FUNCTIONS
 # ----------------------------------------------------------------------------------------
+
+predefined_extrinsics = {
+    'front': np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]]),
+    'left': np.array([[0, 0, 1], [0, -1, 0], [1, 0, 0]]),
+    'right': np.array([[0, 0, -1], [0, -1, 0], [-1, 0, 0]]),
+    'topdown': np.array([[1, 0, 0], [0, 0, 1], [0, -1, 0]]),
+    'bottom': np.array([[1, 0, 0], [0, 0, -1], [0, 1, 0]]),
+    'behind': np.array([[-1, 0, 0], [0, -1, 0], [0, 0, 1]])
+} 
+
+def snap_to_closest_plane(vis, view_control):
+    cam_params = view_control.convert_to_pinhole_camera_parameters()
+    current_extrinsic = cam_params.extrinsic
+
+    #extract rotational portion of extrinsic
+    current_rotation = current_extrinsic[:3, :3]
+    
+    #find closest match
+    closest_match = None
+    smallest_difference = np.inf
+
+
+    for name, rotation in predefined_extrinsics.items():
+        difference = np.sum(np.abs(current_rotation - rotation))
+        if difference < smallest_difference:
+            closest_match = name
+            smallest_difference = difference
+            
+    print(f"Closest match: {closest_match}")
+    
+    updated_extrinsic = current_extrinsic.copy()
+    updated_extrinsic[:3, :3] = predefined_extrinsics[closest_match]
+
+    smooth_transition(vis, view_control, updated_extrinsic)
+
+
+def snap_isometric(vis, view_control):
+    # Obtain the current extrinsic parameters
+    cam_params = view_control.convert_to_pinhole_camera_parameters()
+    current_extrinsic = cam_params.extrinsic
+    #print("Current Extrinsic:", current_extrinsic)
+
+    #predefined extrinsic set for the isometric view
+    target_extrinsic = np.array([
+        [0.86600324, 0.0, 0.50003839, -0.1],
+        [-0.21133220, -0.90629373, 0.36601965, 0.1],
+        [0.45318549, -0.42264841, -0.78485109, 0.75],
+        [0.0, 0.0, 0.0, 1.0]
+    ])
+    
+    # Execute the smooth transition to the new isometric view
+    smooth_transition(vis, view_control, target_extrinsic)
+
+
 def convert_rotation_matrix_to_quaternion(rotation_matrix):
     # Ensure the rotation matrix is writable by making a copy
     rotation_matrix_copy = np.array(rotation_matrix, copy=True)
@@ -85,7 +139,7 @@ def move_camera(view_control, direction, amount=1.5):
     extrinsic = np.array(cam_params.extrinsic)
 
     if direction == "forward":
-        extrinsic[2, 3] -= round(amount)
+        extrinsic[2, 3] -= amount
     elif direction == "backward":
         extrinsic[2, 3] += amount
     elif direction == "left":
@@ -262,6 +316,11 @@ def parseCommand(
         case "update":
             handleUpdateGeo(info[1:], geometry_dir, history, objectHandle)
             return ""
+        case "home":
+            snap_isometric(vis, view_control)
+        case "snap":
+            snap_to_closest_plane(vis, view_control)
+        
 
 
 def handleCam(subcommand, view_control, history):
@@ -478,6 +537,8 @@ def main():
     serverSocket = startServer()
     clientSocket = makeConnection(serverSocket);
 
+
+    #clientSocket = startClient() #for fake TCP server
     camera_parameters = o3d.camera.PinholeCameraParameters()
 
     width = 1280
@@ -505,9 +566,6 @@ def main():
     )
 
     print("Testing mesh in Open3D...")
-    # armadillo_mesh = o3d.data.ArmadilloMesh()
-    # mesh = o3d.io.read_triangle_mesh(armadillo_mesh.path)
-    # mesh.compute_vertex_normals()
 
     mesh = o3d.geometry.TriangleMesh.create_box(width=0.2, height=0.2, depth=0.2)
     mesh.compute_vertex_normals()
