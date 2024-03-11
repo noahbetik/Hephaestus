@@ -928,7 +928,6 @@ def main():
                                         point_history,
                                         axis,
                                     )
-                                    # print("This is from DUAL 1:")
                                     tcp_client.send_gesture(  # Send "start" command for the gesture
                                         gesture_start_command
                                     )
@@ -1053,7 +1052,6 @@ def main():
                                     gesture_subtype = gesture_types[hand_sign_name][
                                         "subtype"
                                     ]
-                                    print("This is from SINGLE:")
                                     gesture_active_command = active_command(
                                         gesture_type, gesture_subtype, point_history
                                     )
