@@ -77,6 +77,10 @@ def start_command(gesture_type, gesture_subtype, point_history):
             return "snap right"
         case ("snap", "left"):
             return "snap left"
+        case ("snap_iso", "left"):
+            return "snap isometric left"
+        case ("snap_iso", "right"):
+            return "snap isometric right"
         case (
             "deselect",
             _,
@@ -105,6 +109,10 @@ def active_command(gesture_type, gesture_subtype, point_history):
         case ("snap_righthand", "None"):
             return ""
         case ("snap_lefthand", "None"):
+            return ""
+        case ("snap_iso", "left"):
+            return ""
+        case ("snap_iso", "right"):
             return ""
         case (
             "deselect",
@@ -293,6 +301,7 @@ def main():
                                     gesture_type == "toggle"
                                     or gesture_type == "deselect"
                                     or gesture_type == "snap"
+                                    or gesture_type == "snap_iso"
                                 ):
                                     locked_in = False
                                     gesture_counter = 0
