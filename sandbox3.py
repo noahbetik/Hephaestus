@@ -5,6 +5,7 @@ from scipy.spatial import Voronoi, voronoi_plot_2d
 from shapely.geometry import Polygon, Point
 
 ps = [[0,0,0], [1,0,0], [1.5,1,0], [1,2,0], [0,2,0], [-0.5,1,0]]
+ps2 = [[0,0,1], [1,0,1], [1.5,1,1], [1,2,1], [0,2,1], [-0.5,1,1]]
 
 
 def generate_points_in_polygon(polygon, num_points):
@@ -49,6 +50,23 @@ def linear_interpolate_3d(point1, point2, n):
 
     return intermediate_points
 
+def scale_polygon_2d(polygon, scale_factor):
+    # Compute the centroid of the polygon
+    centroid = np.mean(polygon, axis=0)
+
+    # Translate the polygon to the origin
+    translated_polygon = polygon - centroid
+
+    # Scale the polygon
+    scaled_polygon = translated_polygon * scale_factor
+
+    # Translate the scaled polygon back to its original position
+    scaled_polygon += centroid
+
+    print(scaled_polygon)
+
+    return scaled_polygon.tolist()
+
 # Define a polygon (in this case, a hexagon)
 polygon = Polygon(ps)
 
@@ -77,6 +95,10 @@ for p in points:
         stacked.append([p[0], p[1], i/10])
 
 points = points + stacked
+
+points = points + scale_polygon_2d(np.array(ps), 0.5)
+points = points + scale_polygon_2d(np.array(ps2), 0.5)
+
 pcd.points = o3d.utility.Vector3dVector(points)
 pcd.estimate_normals()
 
