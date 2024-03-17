@@ -257,7 +257,7 @@ def startClient():
 
 def startServer():
     serverSocket = s.socket(s.AF_INET, s.SOCK_STREAM) # IPV4 address family, datastream connection
-    serverAddr = ('localhost', 4444) # (IP addr, port)
+    serverAddr = ('localhost', 4445) # (IP addr, port)
     serverSocket.bind(serverAddr)
     print("Server started on " + str(serverAddr[0]) + " on port " + str(serverAddr[1]))
 
