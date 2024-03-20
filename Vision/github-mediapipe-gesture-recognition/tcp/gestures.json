@@ -6,9 +6,9 @@
 	"4 Fingers": { "type": "toggle", "subtype": "mode" },
 	"Rock on": { "type": "toggle", "subtype": "motion" },
 	"Thumbs Down": { "type": "deselect", "subtype": "None" },
-	"L_RightHand": { "type": "snap", "subtype": "right" },
-	"L_LeftHand": { "type": "snap", "subtype": "left" },
+	"L_RightHand": { "type": "snap", "subtype": "None" },
+	"L_LeftHand": { "type": "snap", "subtype": "None" },
 	"Thumbs Up": { "type": "select", "subtype": "None" },
-	"Illuminati_LeftHand": { "type": "snap_iso", "subtype": "left" },
-	"Illuminati_RightHand": { "type": "snap_iso", "subtype": "right" }
+	"Illuminati_LeftHand": { "type": "snap", "subtype": "None" },
+	"Illuminati_RightHand": { "type": "snap", "subtype": "None" }
 }

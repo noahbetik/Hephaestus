@@ -59,7 +59,9 @@ def get_args():
     return args
 
 
-def start_command(gesture_type, gesture_subtype, point_history, axis="z"):
+def start_command(
+    gesture_type, gesture_subtype, point_history, axis="z", snap_view="iso"
+):
     match (gesture_type, gesture_subtype):
         case ("motion", "zoom"):  # 2 fingers
             return f"motion zoom start {point_history[-1][0]}"
@@ -73,14 +75,8 @@ def start_command(gesture_type, gesture_subtype, point_history, axis="z"):
             return "toggle mode"
         case ("toggle", "motion"):
             return "toggle motion"
-        case ("snap", "right"):
-            return "snap right"
-        case ("snap", "left"):
-            return "snap left"
-        case ("snap_iso", "left"):
-            return "snap isometric left"
-        case ("snap_iso", "right"):
-            return "snap isometric right"
+        case ("snap", "None"):
+            return f"snap {snap_view}"
         case (
             "deselect",
             _,
@@ -707,7 +703,7 @@ def draw_info(image, fps, mode, number):
     return image
 
 
-def main():
+def argument_parsing():
     # Argument parsing #################################################################
     args = get_args()
 
@@ -721,12 +717,6 @@ def main():
 
     use_brect = True
 
-    # Initialize and connect the TCP client
-    tcp_client = TCPClient(
-        host="localhost", port=4445
-    )  # Adjust host and port if needed
-    tcp_client.connect()
-
     # Camera preparation ###############################################################
     cap = cv.VideoCapture(cap_device)
     # Replace with the same PORT used in the ffmpeg command
@@ -735,6 +725,58 @@ def main():
     # cap = cv.VideoCapture(stream_url)
     cap.set(cv.CAP_PROP_FRAME_WIDTH, cap_width)
     cap.set(cv.CAP_PROP_FRAME_HEIGHT, cap_height)
+
+    return (
+        cap,
+        use_static_image_mode,
+        min_detection_confidence,
+        min_tracking_confidence,
+        use_brect,
+    )
+
+
+def create_tcp_client():
+    return TCPClient(host="localhost", port=4445)  # Adjust host and port if needed
+
+
+def process_key(cv):
+    key = cv.waitKey(10)
+    if key == 27:  # ESC
+        return None
+    return key
+
+
+def capture_and_preprocess_frame(cap, cv):
+    ret, image = cap.read()
+    if not ret:
+        return None, None
+    image = cv.flip(image, 1)  # Mirror display
+    debug_image = copy.deepcopy(image)
+    return image, debug_image
+
+
+def process_detection(image, hands, cv, point_history, keypoint_classifier):
+    image_rgb = cv.cvtColor(image, cv.COLOR_BGR2RGB)
+    image_rgb.flags.writeable = False  # set to read only
+    results = hands.process(image_rgb)
+    image_rgb.flags.writeable = True
+    return results
+
+
+def main():
+
+    # Parse arguments provided in python command
+    (
+        cap,
+        use_static_image_mode,
+        min_detection_confidence,
+        min_tracking_confidence,
+        use_brect,
+    ) = argument_parsing()
+
+    # Initialize and connect the TCP client
+    tcp_client = create_tcp_client()
+    tcp_client.connect()
 
     # Model load #############################################################
     mp_hands = mp.solutions.hands  # initialize mediapipe's hand solution
@@ -795,6 +837,7 @@ def main():
     dual_gesture_detected = False  # Used to detect a dual gesture
     dual_gesture = None
     axis = None
+    snap_view = None
 
     # Get gesture types
     gesture_types = load_gesture_definitions("./tcp/gestures.json")
@@ -802,20 +845,16 @@ def main():
     while True:
         fps = cvFpsCalc.get()
 
-        # Process Key (ESC: end) #################################################
-        key = cv.waitKey(10)
-        if key == 27:  # ESC
+        # Process Key (ESC: end)
+        key = process_key(cv)
+        if key == None:
             break
         number, mode = select_mode(key, mode)
 
-        # Camera capture #####################################################
-        ret, image = cap.read()
-        if not ret:
-            break
-        image = cv.flip(image, 1)  # Mirror display
-        debug_image = copy.deepcopy(image)
+        # Camera capture
+        image, debug_image = capture_and_preprocess_frame(cap, cv)
 
-        # Detection implementation #############################################################
+        # Detection implementation
         image = cv.cvtColor(image, cv.COLOR_BGR2RGB)
 
         image.flags.writeable = False  # set to read only
@@ -860,6 +899,8 @@ def main():
                         (1, 6): "One finger and a fist",
                         (2, 6): "Two fingers and a fist",
                         (4, 6): "Three fingers and a fist",
+                        (10, 11): "Illuminati",  # Snap Isometric
+                        (8, 7): "L Shape",  # Snap Home
                     }
 
                     # Get the dual gesture combination
@@ -881,14 +922,12 @@ def main():
                     pre_processed_landmark_list
                 )
 
-                if hand_sign_id == 1 or 4:  # Point gesture
-                    point_history.append(landmark_list[8])
-                else:
-                    point_history.append([0, 0])
-
                 # Dual gesture
                 if dual_gesture or dual_gesture_detected:
                     if confidence >= gesture_confidence_threshold:
+                        if hand_label == "Right":
+                            if right_hand_gesture_id == 6:  # Fist gesture
+                                point_history.append(landmark_list[8])
                         # print(f"Dual gesture detected: {dual_gesture}")
                         if not locked_in:
                             if (
@@ -911,7 +950,9 @@ def main():
                                     gesture_subtype = gesture_types[
                                         right_hand_sign_name
                                     ]["subtype"]
-                                    print(f"\nGesture: {dual_gesture} locked in")
+                                    print(
+                                        f"\nGesture: {dual_gesture} locked in FROM DUAL"
+                                    )
                                     dual_gesture_detected = True
 
                                     match left_hand_gesture_id:
@@ -921,19 +962,24 @@ def main():
                                             axis = "y"
                                         case 4:  # 3 fingers
                                             axis = "z"
+                                        case 8:  # L_LeftHand, home
+                                            snap_view = "home"
+                                        case 10:  # Illuminati_LeftHand, iso
+                                            snap_view = "iso"
 
                                     gesture_start_command = start_command(
                                         gesture_type,
                                         gesture_subtype,
                                         point_history,
                                         axis,
+                                        snap_view,
                                     )
                                     tcp_client.send_gesture(  # Send "start" command for the gesture
                                         gesture_start_command
                                     )
                                     # Your code to handle gesture activation
                         else:
-                            if right_hand_gesture_id == 5:
+                            if right_hand_gesture_id == 5:  # 5 = thumbs down
                                 if (
                                     right_hand_gesture_id
                                     == previous_right_hand_gesture_id
@@ -951,10 +997,46 @@ def main():
                                         )
                                         locked_in = False
                                         axis = None
+                                        snap_view = None
                                         gesture_counter = 0
                                         active_gesture_id = None
                                         dual_gesture = False
                                         dual_gesture_detected = False
+                                else:
+                                    gesture_counter = 1
+                            elif (
+                                left_hand_gesture_id == 8
+                                or left_hand_gesture_id == 10
+                                or right_hand_gesture_id == 11
+                                or right_hand_gesture_id == 7
+                                and left_hand_gesture_id != 6
+                            ):  # 7: L_RightHand, 11: Illuminati_RightHand
+                                print(f"left_hand_gesture id = {left_hand_gesture_id}")
+                                print(f"left_hand_gesture id = {right_hand_gesture_id}")
+                                if (
+                                    right_hand_gesture_id
+                                    == previous_right_hand_gesture_id
+                                ):
+                                    gesture_counter += 1
+
+                                    # sys.stdout.write(
+                                    #     f"\rGesture: {hand_sign_name}, Frames: {gesture_counter}, Confidence: {confidence:.5f}"
+                                    # )
+                                    # sys.stdout.flush()
+                                    # if gesture_counter >= gesture_lock_threshold:
+                                    print("RESETTING 1")
+                                    locked_in = False
+                                    axis = None
+                                    snap_view = None
+                                    gesture_counter = 0
+                                    active_gesture_id = None
+                                    dual_gesture = False
+                                    dual_gesture_detected = False
+                                    previous_hand_sign_id = None
+                                    right_hand_gesture_id = None
+                                    left_hand_gesture_id = None
+                                    left_hand_sign_name = None
+                                    right_hand_sign_name = None
                                 else:
                                     gesture_counter = 1
                             elif right_hand_gesture_id == active_gesture_id:
@@ -964,11 +1046,9 @@ def main():
                                 gesture_subtype = gesture_types[right_hand_sign_name][
                                     "subtype"
                                 ]
-
                                 gesture_active_command = active_command(
                                     gesture_type, gesture_subtype, point_history
                                 )
-                                # print("This is from DUAL 2:")
                                 tcp_client.send_gesture(  # Send "active" command for the gesture
                                     gesture_active_command
                                 )
@@ -979,7 +1059,10 @@ def main():
                 # Single gesture
                 else:
                     if not dual_gesture_detected:
+                        # print("Not dual detected")
                         if confidence >= gesture_confidence_threshold:
+                            if hand_sign_id == 1 or 4:  # Pointer or 3 fingers
+                                point_history.append(landmark_list[8])
                             # If we're not locked in yet...
                             if not locked_in:
                                 # If the current gesture detected is the same as the last frame...
@@ -987,6 +1070,10 @@ def main():
                                     hand_sign_id == previous_hand_sign_id
                                     and hand_sign_id != 5  # thumbs down
                                     and hand_sign_id != 6  # fist
+                                    and left_hand_gesture_id != 8
+                                    and left_hand_gesture_id != 10
+                                    and right_hand_gesture_id != 11
+                                    and right_hand_gesture_id != 7
                                 ):
                                     gesture_counter += 1  # Increment gesture counter
 
@@ -1019,7 +1106,6 @@ def main():
                                             gesture_type == "toggle"
                                             or gesture_type == "deselect"
                                             or gesture_type == "snap"
-                                            or gesture_type == "snap_iso"
                                         ):
                                             locked_in = False
                                             gesture_counter = 0
@@ -1052,6 +1138,8 @@ def main():
                                     gesture_subtype = gesture_types[hand_sign_name][
                                         "subtype"
                                     ]
+                                    print("This is from DUAL SEND 3:")
+
                                     gesture_active_command = active_command(
                                         gesture_type, gesture_subtype, point_history
                                     )
@@ -1111,18 +1199,37 @@ def main():
             if gesture_counter > 0 or locked_in:
                 print("\nNo gesture detected. Resetting...")
                 if (
-                    gesture_type and gesture_subtype
+                    gesture_type
+                    and gesture_subtype
+                    # and left_hand_gesture_id != 8
+                    # and left_hand_gesture_id != 10
+                    # and right_hand_gesture_id != 11
+                    # and right_hand_gesture_id != 7
                 ):  # Send end command in the event we lose a gesture
+                    # if (true
+                    #     # left_hand_gesture_id != 8
+                    #     # and left_hand_gesture_id != 10
+                    #     # and right_hand_gesture_id != 11
+                    #     # and right_hand_gesture_id != 7
+                    # ):
                     tcp_client.send_gesture(f"{gesture_type} {gesture_subtype} end")
                     gesture_type = None
                     gesture_subtype = None
+                print("RESETTING 2")
                 point_history.append([0, 0])
                 gesture_counter = 0
-                previous_hand_sign_id = None
+                # previous_hand_sign_id = None
+                # previous_right_hand_gesture_id = None
+                # previous_left_hand_gesture_id = None
                 right_hand_gesture_id = None
                 left_hand_gesture_id = None
+                left_hand_sign_name = None
+                right_hand_sign_name = None
                 locked_in = False
                 dual_gesture = False
+            else:
+                right_hand_gesture_id = None
+                left_hand_gesture_id = None
 
         # debug_image = draw_point_history(debug_image, point_history)
         debug_image = draw_current_pointer_coordinates(debug_image, point_history)
