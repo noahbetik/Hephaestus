@@ -74,7 +74,8 @@ class MainWindow(QtWidgets.QMainWindow):
         layout.addWidget(self.open3d_widget, 1)  # Add with stretch factor of 1 to take up remaining space
 
 
-
+    def update_text(self, new_text):
+        self.text_display_widget.setText(new_text)
 
 
 predefined_extrinsics = {
@@ -370,13 +371,16 @@ def closeClient(sock):
 
 
 def parseCommand(
-    command, view_control, camera_parameters, vis, geometry_dir, history, objectHandle
+    command, view_control, camera_parameters, vis, geometry_dir, history, objectHandle, main_window
 ):
     # FORMAT
     # [command] [subcommand]
 
     info = command.split(" ")
     print(info)
+
+    if len(info) > 1:
+            main_window.update_text(info[1])  # Use the update_text method of the main window
 
     match info[0]:
         case "motion":
@@ -605,14 +609,14 @@ def handleSelection():
     return
 
 
-def handle_commands(clientSocket, vis, view_control, camera_parameters, geometry_dir, history, objectHandle):
+def handle_commands(clientSocket, vis, view_control, camera_parameters, geometry_dir, history, objectHandle, main_window):
     try:
         # Attempt to receive data, but don't block indefinitely
         clientSocket.settimeout(0.1)  # Non-blocking with timeout
         command = getTCPData(clientSocket)
         if command:
             # Parse and handle the command
-            parseCommand(command, view_control, camera_parameters, vis, geometry_dir, history, objectHandle)
+            parseCommand(command, view_control, camera_parameters, vis, geometry_dir, history, objectHandle, main_window)
             vis.poll_events()
             vis.update_renderer()
     except s.timeout:
@@ -689,7 +693,7 @@ def main():
 
     # Setup a QTimer to periodically check for new commands
     timer = QtCore.QTimer()
-    timer.timeout.connect(lambda: handle_commands(clientSocket, vis, view_control, camera_parameters, geometry_dir, history, objectHandle))
+    timer.timeout.connect(lambda: handle_commands(clientSocket, vis, view_control, camera_parameters, geometry_dir, history, objectHandle, main_window))
     timer.start(1)  # Check every 100 milliseconds
 
     sys.exit(app.exec_())
