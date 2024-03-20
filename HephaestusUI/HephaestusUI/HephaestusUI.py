@@ -1,10 +1,14 @@
 import open3d as o3d
+import win32gui
 import numpy as np
 import keyboard
 import socket as s
 import time
+import sys
 from scipy.spatial.transform import Rotation as R
 from scipy.spatial.transform import Slerp
+from PySide6 import QtWidgets, QtGui, QtCore
+from PySide6.QtGui import QFont
 
 
 # ----------------------------------------------------------------------------------------
@@ -20,6 +24,58 @@ from scipy.spatial.transform import Slerp
 # ----------------------------------------------------------------------------------------
 # HELPER FUNCTIONS
 # ----------------------------------------------------------------------------------------
+
+class Open3DVisualizerWidget(QtWidgets.QWidget):
+    def __init__(self, vis, parent=None):
+        super(Open3DVisualizerWidget, self).__init__(parent)
+        self.vis = vis
+        self.initUI()
+
+    def initUI(self):
+        # Assuming your Open3D window has been created with vis.create_window()
+        hwnd = win32gui.FindWindowEx(0, 0, None, "Open3D")  # Find the Open3D window; might need adjustment
+        self.window = QtGui.QWindow.fromWinId(hwnd)
+        self.windowcontainer = QtWidgets.QWidget.createWindowContainer(self.window)
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.addWidget(self.windowcontainer)
+        self.setLayout(layout)
+
+    def closeEvent(self, event):
+        super(Open3DVisualizerWidget, self).closeEvent(event)
+        self.vis.destroy_window()
+
+class TextDisplayWidget(QtWidgets.QLabel):
+    def __init__(self, text="Hello World", parent=None):
+        super(TextDisplayWidget, self).__init__(parent)
+               #
+        font = QFont("Arial", 24)  
+        self.setFont(font)
+
+        self.setText(text)
+        self.setAlignment(QtCore.Qt.AlignCenter)  # Center align the text
+
+class MainWindow(QtWidgets.QMainWindow):
+    def __init__(self, vis):
+        super(MainWindow, self).__init__()
+        self.setWindowTitle("Open3D and Text Display in PySide6")
+        self.setGeometry(100, 100, 1280, 960)
+
+        # Create a central widget and set a layout for it
+        central_widget = QtWidgets.QWidget(self)
+        self.setCentralWidget(central_widget)
+        layout = QtWidgets.QVBoxLayout(central_widget)
+
+        # Create and add the text display widget
+        self.text_display_widget = TextDisplayWidget("Hello World")
+        layout.addWidget(self.text_display_widget)  # No stretch factor necessary here
+
+        # Create and add the Open3D visualizer widget
+        self.open3d_widget = Open3DVisualizerWidget(vis)
+        layout.addWidget(self.open3d_widget, 1)  # Add with stretch factor of 1 to take up remaining space
+
+
+
+
 
 predefined_extrinsics = {
     'front': np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]]),
@@ -271,15 +327,37 @@ def makeConnection(serverSocket):
     
     return clientSocket
 
+tcp_command_buffer = ""
 
 def getTCPData(sock):
-    # should have error control
-    data = sock.recv(40)
-    readable = data.decode(encoding="ascii")
-    print("Received: ", readable)
-    processed = readable.strip("$")
-    print("Strip padding: ", processed)
-    return processed
+    global tcp_command_buffer
+    print("attempting to recieve")
+    try:
+        # Temporarily set a non-blocking mode to check for new data
+        sock.setblocking(False)
+        data = sock.recv(1024)  # Attempt to read more data
+        sock.setblocking(True)  # Revert to the original blocking mode
+
+        # Decode and append to buffer
+        tcp_command_buffer += data.decode('ascii')
+
+        # Process if delimiter is found
+        if '\n' in tcp_command_buffer:
+            command, tcp_command_buffer = tcp_command_buffer.split('\n', 1)
+            command = command.strip("$")  # Strip any '$' characters as in your original processing
+            print("Received: ", command)
+            return command
+    except BlockingIOError:
+        # No new data available; pass this iteration
+        pass
+    except s.timeout:
+        # Handle possible timeout exception if setblocking(false) wasn't enough
+        pass
+    except Exception as e:
+        print(f"Unexpected error receiving data: {e}")
+
+    # No complete command was processed
+    return None
 
 
 def closeClient(sock):
@@ -527,18 +605,40 @@ def handleSelection():
     return
 
 
+def handle_commands(clientSocket, vis, view_control, camera_parameters, geometry_dir, history, objectHandle):
+    try:
+        # Attempt to receive data, but don't block indefinitely
+        clientSocket.settimeout(0.1)  # Non-blocking with timeout
+        command = getTCPData(clientSocket)
+        if command:
+            # Parse and handle the command
+            parseCommand(command, view_control, camera_parameters, vis, geometry_dir, history, objectHandle)
+            vis.poll_events()
+            vis.update_renderer()
+    except s.timeout:
+        # Ignore timeout exceptions, which are expected due to non-blocking call
+        pass
+    except Exception as e:
+        # Log or print other unexpected exceptions
+        print(f"Unexpected error handling command: {e}")
+    finally:
+        clientSocket.settimeout(None)  # Reset to blocking mode
+
+
+
+
 # ----------------------------------------------------------------------------------------
 # MAIN
 # ----------------------------------------------------------------------------------------
 
 
 def main():
-
+    app = QtWidgets.QApplication(sys.argv)
     serverSocket = startServer()
     clientSocket = makeConnection(serverSocket);
 
 
-    #clientSocket = startClient() #for fake TCP server
+   # clientSocket = startClient() #for fake TCP server
     camera_parameters = o3d.camera.PinholeCameraParameters()
 
     width = 1280
@@ -579,37 +679,20 @@ def main():
 
     view_control = vis.get_view_control()
 
-    i = 1  # temp
-
-    geometry_dir = {
-        "counters": {"pcd": 0, "ls": 0, "mesh": 0}
-    }  # may need to be changed depending on how selection works
-
+    # Initialize required dictionaries and parameters
+    geometry_dir = {"counters": {"pcd": 0, "ls": 0, "mesh": 0}}
     history = {"operation": "", "axis": "", "lastVal": ""}
     objectHandle = ""
 
-    pcd_counter = 0  # number of pointclouds # remove
-    ls_counter = 0  # number of linesets # remove
-    mesh_counter = 0  # number of meshes # remove
+    main_window = MainWindow(vis)
+    main_window.show()
 
-    while True:
-        # queue system? threading?
-        command = getTCPData(clientSocket)
+    # Setup a QTimer to periodically check for new commands
+    timer = QtCore.QTimer()
+    timer.timeout.connect(lambda: handle_commands(clientSocket, vis, view_control, camera_parameters, geometry_dir, history, objectHandle))
+    timer.start(1)  # Check every 100 milliseconds
 
-        objectHandle = parseCommand(
-            command,
-            view_control,
-            camera_parameters,
-            vis,
-            geometry_dir,
-            history,
-            objectHandle,
-        )
-
-        vis.poll_events()
-        vis.update_renderer()
-
-    vis.destroy_window()
+    sys.exit(app.exec_())
 
 
 if __name__ == "__main__":

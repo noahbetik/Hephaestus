@@ -719,12 +719,15 @@ def main():
 
     # Initialize and connect the TCP client
     tcp_client = TCPClient(
-        host="localhost", port=4445
+        host="localhost", port=4444
     )  # Adjust host and port if needed
     tcp_client.connect()
 
     # Camera preparation ###############################################################
-    cap = cv.VideoCapture(cap_device)
+    cap= cv.VideoCapture(0,cv.CAP_DSHOW)
+
+    if not cap.isOpened():
+        raise IOError("Cannot open webcam")
     # Replace with the same PORT used in the ffmpeg command
     # stream_url = 'udp://@:444'
 

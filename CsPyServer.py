@@ -24,3 +24,5 @@ def startServer():
 
 
 startServer()
+# motion rotate start x 40
+# motion rotate position 80

@@ -17,6 +17,7 @@ class TCPClient:
             self.connection = None
 
     def send_gesture(self, gesture_name):
+        gesture_name = gesture_name + '\n'
         if self.connection:
             try:
                 self.connection.sendall(gesture_name.encode(encoding="ascii"))
