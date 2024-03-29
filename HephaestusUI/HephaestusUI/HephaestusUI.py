@@ -25,6 +25,13 @@ from PySide6.QtGui import QFont
 # HELPER FUNCTIONS
 # ----------------------------------------------------------------------------------------
 
+
+objects_dict = {}
+
+
+
+
+
 class Open3DVisualizerWidget(QtWidgets.QWidget):
     def __init__(self, vis, parent=None):
         super(Open3DVisualizerWidget, self).__init__(parent)
@@ -249,7 +256,7 @@ def rotate_camera(view_control, axis, degrees=5):
 
     if axis == "y":
         rotation_matrix = np.array(
-            [
+            [       
                 [np.cos(angle), 0, np.sin(angle)],
                 [0, 1, 0],
                 [-np.sin(angle), 0, np.cos(angle)],
@@ -332,7 +339,6 @@ tcp_command_buffer = ""
 
 def getTCPData(sock):
     global tcp_command_buffer
-    print("attempting to recieve")
     try:
         # Temporarily set a non-blocking mode to check for new data
         sock.setblocking(False)
@@ -385,7 +391,7 @@ def parseCommand(
     match info[0]:
         case "motion":
             if objectHandle == "":
-                handleCam(info[1:], view_control, history)
+                handleCam(info[1:], view_control, history, vis)
                 return ""
             else:
                 handleUpdateGeo(info[1:], geometry_dir, history, objectHandle)
@@ -405,7 +411,125 @@ def parseCommand(
         
 
 
-def handleCam(subcommand, view_control, history):
+
+
+def get_camera_look_at_position(view_control):
+    cam_params = view_control.convert_to_pinhole_camera_parameters()
+    
+    # Inverse of the view matrix gives the camera's orientation and position in world space
+    inverse_view_matrix = np.linalg.inv(cam_params.extrinsic)
+    
+    # Camera's position is the fourth column of the inverse view matrix
+    camera_position = inverse_view_matrix[:3, 3]
+    
+    # Assuming the camera looks along the -Z axis in its local space, transform this to world space
+    # This gives us the forward direction vector in world space
+    forward_direction = np.dot(inverse_view_matrix[:3, :3], np.array([0, 0, -1]))
+    
+    # Normalize the forward direction
+    forward_direction_normalized = forward_direction / np.linalg.norm(forward_direction)
+    
+    # Define a distance in front of the camera to place the "look-at" point
+    distance = 0.1  # This is arbitrary and can be adjusted as needed
+    
+    # Calculate the look-at point by moving along the camera's forward direction from its position
+    look_at_point = camera_position + distance * forward_direction_normalized
+    look_at_point[2] = 0.5
+    
+    return look_at_point
+
+
+def add_visual_marker(vis, point, radius=0.02, color=[1, 0, 0]):
+    """
+    Adds a visual marker (a small sphere) at the specified point in the scene.
+
+    Parameters:
+    - vis: The Open3D visualizer object.
+    - point: The [x, y, z] coordinates where the marker should be placed.
+    - radius: The radius of the sphere used as a marker.
+    - color: The color of the marker, specified as [r, g, b] components.
+    """
+    # Create a sphere at the origin
+    marker = o3d.geometry.TriangleMesh.create_sphere(radius=radius)
+    marker.compute_vertex_normals()
+    
+    # Move the sphere to the specified point
+    translation = np.array(point) - np.array(marker.get_center())
+    marker.translate(translation)
+    
+    # Color the marker
+    marker.paint_uniform_color(color)
+    
+    # Add the marker to the visualizer
+    vis.add_geometry(marker)
+
+def highlight_objects_near_camera_look_at(vis, view_control, objects_dict, vicinity_threshold=0.5):
+    """
+    Highlights objects that are within a certain vicinity of the camera's look-at point.
+    
+    Parameters:
+    - vis: Open3D visualization object.
+    - view_control: Open3D view control object associated with the vis.
+    - objects_dict: Dictionary of objects with their centers.
+    - vicinity_threshold: Distance threshold to consider an object near the camera's look-at point.
+    """
+    # Calculate the current look-at point of the camera
+    look_at_point = get_camera_look_at_position(view_control)
+    #add_visual_marker(vis, look_at_point, color=[1, 0, 0])
+    print(f"Camera look-at point: {look_at_point}")  # Debug statement
+    
+    # Iterate through each object in objects_dict
+    for object_id, info in objects_dict.items():
+        obj = info['object']
+        center = info['center']
+        print(f"Checking {object_id} at center {center}")  # Debug statement
+        
+        # Calculate the distance from the object's center to the look-at point
+        distance = np.linalg.norm(np.array(center) - np.array(look_at_point))
+        print(f"Distance from look-at point to {object_id}: {distance}")  # Debug statement
+        
+        # If the object is within the vicinity threshold, highlight it
+        if distance <= vicinity_threshold:
+            print(f"{object_id} is within vicinity threshold and will be highlighted.")  # Debug statement
+            obj.paint_uniform_color([0.678, 1, 0.184])  # Light green
+            vis.update_geometry(obj)
+
+            # Assuming vis.update_geometry(obj) is correctly handled as per your visualizer's capabilities
+            # Note: For the basic Visualizer, you might need to remove and re-add the object to see the color change.
+        else:
+            print(f"{object_id} is not within vicinity threshold and will not be highlighted.")  # Debug statement
+            obj.paint_uniform_color([1, 1, 1])  # Reset to default color or another color of choice
+            vis.update_geometry(obj)
+
+
+
+    # Note: Depending on your Open3D version and the visualizer used, you might need to manually refresh the visualizer.
+
+
+def make_object_green(vis, object_id, objects_dict):
+    """
+    Looks for the specified object ID in the objects dictionary and changes its color to light green if found.
+    The function assumes each entry in objects_dict is a dictionary with an 'object' key holding the geometry object.
+    
+    Parameters:
+    - object_id: The ID of the object to change color (e.g., 'object_1').
+    - objects_dict: Dictionary containing the objects and their centers, where keys are object IDs.
+    """
+    # Check if the specified object ID is in the dictionary
+    if object_id in objects_dict:
+        # Retrieve the nested dictionary for the object
+        obj_info = objects_dict[object_id]
+        obj = obj_info['object']  # Access the actual Open3D geometry object
+        # Change the object's color to light green
+        obj.paint_uniform_color([0.678, 1, 0.184])  # Light green
+        vis.update_geometry(obj)
+
+        print(f"Changed color of {object_id} to light green.")
+        
+    else:
+        print(f"{object_id} not found in objects dictionary.")
+
+def handleCam(subcommand, view_control, history, vis):
 
     # FORMAT:
     # start [operation] [axis] [position]
@@ -446,6 +570,18 @@ def handleCam(subcommand, view_control, history):
                     deltaY = (float(splitCoords[0]) - float(oldCoords[0])) * alphaM
                     deltaZ = (float(splitCoords[1]) - float(oldCoords[1])) * alphaM
                     move_camera_v3(view_control, [deltaY, deltaZ])
+                    #make_object_green(vis, 'object_1', objects_dict)
+
+
+
+
+                    #get_camera_position_and_look_at(view_control)
+                    highlight_objects_near_camera_look_at(vis, view_control, objects_dict)
+                    
+        #  print(f"current centre {center}")
+        #             for object_id, center in objects_dict.items():
+        #                 print(f"{object_id}: Center = {center}")
+           
 
                     #delta = float(subcommand[2]) - float(history["lastVal"])
                     #move_camera_v2(view_control, history["axis"], delta * alphaM)
@@ -638,6 +774,19 @@ def handle_commands(clientSocket, vis, view_control, camera_parameters, geometry
 
 def main():
     app = QtWidgets.QApplication(sys.argv)
+    
+    stylesheet = """
+        QMainWindow {
+            background-color: #f2f2f2;
+            font-family: Arial;
+        }
+        QLabel {
+            color: #333;
+            font-size: 20px;
+        }
+        /* Add more styles for other widgets */
+        """
+    app.setStyleSheet(stylesheet)
     serverSocket = startServer()
     clientSocket = makeConnection(serverSocket);
 
@@ -674,12 +823,24 @@ def main():
     mesh = o3d.geometry.TriangleMesh.create_box(width=0.2, height=0.2, depth=0.2)
     mesh.compute_vertex_normals()
 
+
+    mesh2 = o3d.geometry.TriangleMesh.create_box(width=0.2, height=0.4, depth=0.2)
+    mesh2.compute_vertex_normals()
+    mesh2.translate(np.array([0.3, 0.5, 0.3]))
+
     # create visualizer and window.
     vis = o3d.visualization.Visualizer()
     vis.create_window(
         window_name="Open3D", width=width, height=height, left=50, top=50, visible=True
     )
     vis.add_geometry(mesh)
+    vis.add_geometry(mesh2)
+
+
+    objects_dict['object_1'] = {'object': mesh, 'center': mesh.get_center()}
+    objects_dict['object_2'] = {'object': mesh2, 'center': mesh2.get_center()}
+
+
 
     view_control = vis.get_view_control()
 
