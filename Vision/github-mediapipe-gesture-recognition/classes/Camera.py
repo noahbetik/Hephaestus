@@ -60,7 +60,7 @@ class Camera:
     ## CAMERA CAPTURE #############
     # Initiates capturing and pre-processing of frame
     def capture(self):
-        self.image, self.debug_image = self.capture_and_preprocess_frame(self.cap)
+        self.image, self.debug_image = self.capture_and_preprocess_frame()
         # Detection implementation
         self.image = cv.cvtColor(self.image, cv.COLOR_BGR2RGB)
         self.image.flags.writeable = False  # set to read only

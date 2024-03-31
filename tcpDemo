@@ -1,2 +1,0 @@
-python tcpServer.py &
-python tcpClient.py &

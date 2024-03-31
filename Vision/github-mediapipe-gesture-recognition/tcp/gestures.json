@@ -1,14 +1,14 @@
 {
-	"2 Fingers": { "type": "motion", "subtype": "zoom" },
-	"3 Fingers": { "type": "motion", "subtype": "pan" },
-	"Fist": { "type": "motion", "subtype": "rotate" },
-	"Pointer": { "type": "create", "subtype": "line" },
-	"4 Fingers": { "type": "toggle", "subtype": "mode" },
-	"Rock on": { "type": "toggle", "subtype": "motion" },
-	"Thumbs Down": { "type": "deselect", "subtype": "None" },
-	"L_RightHand": { "type": "snap", "subtype": "None" },
-	"L_LeftHand": { "type": "snap", "subtype": "None" },
-	"Thumbs Up": { "type": "select", "subtype": "None" },
-	"Illuminati_LeftHand": { "type": "snap", "subtype": "None" },
-	"Illuminati_RightHand": { "type": "snap", "subtype": "None" }
+	"2 Fingers": { "type": "motion", "subtype": "zoom", "action": "active" },
+	"3 Fingers": { "type": "motion", "subtype": "pan", "action": "active" },
+	"Fist": { "type": "motion", "subtype": "rotate", "action": "active" },
+	"Pointer": { "type": "create", "subtype": "line", "action": "active" },
+	"4 Fingers": { "type": "toggle", "subtype": "mode", "action": "one-hit" },
+	"Rock on": { "type": "toggle", "subtype": "motion", "action": "one-hit" },
+	"Thumbs Down": { "type": "deselect", "subtype": "None", "action": "one-hit" },
+	"L_RightHand": { "type": "snap", "subtype": "None", "action": "one-hit" },
+	"L_LeftHand": { "type": "snap", "subtype": "None", "action": "one-hit" },
+	"Thumbs Up": { "type": "select", "subtype": "None", "action": "one-hit" },
+	"Illuminati_LeftHand": { "type": "snap", "subtype": "None", "action": "one-hit" },
+	"Illuminati_RightHand": { "type": "snap", "subtype": "None", "action": "one-hit" }
 }
