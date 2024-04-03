@@ -27,6 +27,7 @@ from PySide6.QtGui import QFont
 
 
 objects_dict = {}
+curr_highlighted = False
 
 
 
@@ -377,14 +378,16 @@ def closeClient(sock):
 
 
 def parseCommand(
-    command, view_control, camera_parameters, vis,geometry_dir, history, objects_dict, main_window
+    command, view_control, camera_parameters, vis, geometry_dir, history, objects_dict, main_window
 ):
     # FORMAT
     # [command] [subcommand]
 
+
     info = command.split(" ")
     print(info)
     objectHandle = ""
+    
 
     # Check for selected objects in objects_dict and update objectHandle to point to the mesh if selected
     for object_id, obj_info in objects_dict.items():
@@ -406,7 +409,9 @@ def parseCommand(
                 handleUpdateGeo(info[1:], history, objectHandle, vis)
                 return ""
         case "select":
-            return handleSelection(vis, view_control, objects_dict)  # Assume this function handles object selection
+            return handleSelection(objects_dict, vis, main_window)  # Assume this function handles object selection
+        case "deselect":
+            return handleDeselection(objects_dict, vis, main_window)  # Assume this function handles object selection
         case "create":
             handleNewGeo(info[1:], view_control, camera_parameters, vis, objects_dict)
             return ""
@@ -418,8 +423,8 @@ def parseCommand(
         case "snap":
             snap_to_closest_plane(vis, view_control)
 
-    # Optionally return the updated objectHandle if you need to use it outside this function
-    return objectHandle
+
+
 
 
 
@@ -479,18 +484,21 @@ def highlight_objects_near_camera_look_at(vis, view_control, objects_dict, vicin
         # If the object is within the vicinity threshold, highlight it
         if distance <= vicinity_threshold:
             print(f"{object_id} is within vicinity threshold and will be highlighted.")  # Debug statement
-            obj.paint_uniform_color([0.678, 1, 0.184])  # Light green
-            info['selected'] = True
-            vis.update_geometry(obj)
+            curr_highlighted = True
+            
+            if (obj.paint_uniform_color != [0.678, 1, 0.184]) :
+                obj.paint_uniform_color([0.678, 1, 0.184])  # Light green
+                info['highlighted'] = True
+                vis.update_geometry(obj)
 
             # Assuming vis.update_geometry(obj) is correctly handled as per your visualizer's capabilities
             # Note: For the basic Visualizer, you might need to remove and re-add the object to see the color change.
         else:
             print(f"{object_id} is not within vicinity threshold and will not be highlighted.")  # Debug statement
-            info['selected'] = False
+            info['highlighted'] = False
 
-            if ( obj.paint_uniform_color != [1,1,1]):
-                obj.paint_uniform_color([1, 1, 1])  # Reset to default color or another color of choice
+            if ( obj.paint_uniform_color != [0.5, 0.5, 0.5]):
+                obj.paint_uniform_color([0.5, 0.5, 0.5])  # Reset to default color or another color of choice
                 vis.update_geometry(obj)
 
 
@@ -712,11 +720,32 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis):
             print("Invalid command")
 
 
-def handleSelection():
-    # if cursorIsOnObject
-    #   return object
-    # else invalid
-    return
+
+def handleSelection(objects_dict, vis, main_window):
+    for object_id, obj_info in objects_dict.items():
+        if obj_info.get('highlighted', False):  # Check if the 'highlighted' key exists and is True
+            obj_info['selected'] = True
+            obj = obj_info['object']  # Correctly reference the Open3D object
+            obj.paint_uniform_color([0, 0.5, 0])  # Paint the object dark green
+            vis.update_geometry(obj)
+            print(f"Object {object_id} selected")
+            main_window.update_text(f"Object {object_id} selected")
+
+            break  # Exit the loop once an object is marked as selected
+
+
+def handleDeselection(objects_dict, vis, main_window):
+    for object_id, obj_info in objects_dict.items():
+        if obj_info.get('selected', False):  # Check if the 'selected' key exists and is True
+            obj_info['selected'] = False  # Mark the object as deselected
+            obj_info['highlighted'] = False  # Mark the object as deselected
+            obj = obj_info['object']  # Correctly reference the Open3D object
+            obj.paint_uniform_color([0.5, 0.5, 0.5])  # Reset the object color to white
+            vis.update_geometry(obj)
+            print(f"Object {object_id} deselected")
+            main_window.update_text(f"Object {object_id} deselected")
+            
+            break  # Exit the loop once an object is marked as deselected
 
 
 def handle_commands(clientSocket, vis, view_control, camera_parameters, geometry_dir, history, objects_dict, main_window):
@@ -811,8 +840,8 @@ def main():
     vis.add_geometry(mesh2)
 
 
-    objects_dict['object_1'] = {'object': mesh, 'center': mesh.get_center(), 'selected' : False}
-    objects_dict['object_2'] = {'object': mesh2, 'center': mesh2.get_center(), 'selected' : False}
+    objects_dict['object_1'] = {'object': mesh, 'center': mesh.get_center(), 'highlighted' : False, 'selected' : False}
+    objects_dict['object_2'] = {'object': mesh2, 'center': mesh2.get_center(), 'highlighted' : False, 'selected' : False}
 
 
 
