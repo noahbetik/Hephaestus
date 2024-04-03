@@ -1,10 +1,14 @@
 import open3d as o3d
+import win32gui
 import numpy as np
 import keyboard
 import socket as s
 import time
+import sys
 from scipy.spatial.transform import Rotation as R
 from scipy.spatial.transform import Slerp
+from PySide6 import QtWidgets, QtGui, QtCore
+from PySide6.QtGui import QFont
 
 
 # ----------------------------------------------------------------------------------------
@@ -20,6 +24,66 @@ from scipy.spatial.transform import Slerp
 # ----------------------------------------------------------------------------------------
 # HELPER FUNCTIONS
 # ----------------------------------------------------------------------------------------
+
+
+objects_dict = {}
+
+
+
+
+
+class Open3DVisualizerWidget(QtWidgets.QWidget):
+    def __init__(self, vis, parent=None):
+        super(Open3DVisualizerWidget, self).__init__(parent)
+        self.vis = vis
+        self.initUI()
+
+    def initUI(self):
+        # Assuming your Open3D window has been created with vis.create_window()
+        hwnd = win32gui.FindWindowEx(0, 0, None, "Open3D")  # Find the Open3D window; might need adjustment
+        self.window = QtGui.QWindow.fromWinId(hwnd)
+        self.windowcontainer = QtWidgets.QWidget.createWindowContainer(self.window)
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.addWidget(self.windowcontainer)
+        self.setLayout(layout)
+
+    def closeEvent(self, event):
+        super(Open3DVisualizerWidget, self).closeEvent(event)
+        self.vis.destroy_window()
+
+class TextDisplayWidget(QtWidgets.QLabel):
+    def __init__(self, text="Hello World", parent=None):
+        super(TextDisplayWidget, self).__init__(parent)
+               #
+        font = QFont("Arial", 24)  
+        self.setFont(font)
+
+        self.setText(text)
+        self.setAlignment(QtCore.Qt.AlignCenter)  # Center align the text
+
+class MainWindow(QtWidgets.QMainWindow):
+    def __init__(self, vis):
+        super(MainWindow, self).__init__()
+        self.setWindowTitle("Open3D and Text Display in PySide6")
+        self.setGeometry(100, 100, 1280, 960)
+
+        # Create a central widget and set a layout for it
+        central_widget = QtWidgets.QWidget(self)
+        self.setCentralWidget(central_widget)
+        layout = QtWidgets.QVBoxLayout(central_widget)
+
+        # Create and add the text display widget
+        self.text_display_widget = TextDisplayWidget("Hello World")
+        layout.addWidget(self.text_display_widget)  # No stretch factor necessary here
+
+        # Create and add the Open3D visualizer widget
+        self.open3d_widget = Open3DVisualizerWidget(vis)
+        layout.addWidget(self.open3d_widget, 1)  # Add with stretch factor of 1 to take up remaining space
+
+
+    def update_text(self, new_text):
+        self.text_display_widget.setText(new_text)
+
 
 predefined_extrinsics = {
     'front': np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]]),
@@ -192,7 +256,7 @@ def rotate_camera(view_control, axis, degrees=5):
 
     if axis == "y":
         rotation_matrix = np.array(
-            [
+            [       
                 [np.cos(angle), 0, np.sin(angle)],
                 [0, 1, 0],
                 [-np.sin(angle), 0, np.cos(angle)],
@@ -271,15 +335,36 @@ def makeConnection(serverSocket):
     
     return clientSocket
 
+tcp_command_buffer = ""
 
 def getTCPData(sock):
-    # should have error control
-    data = sock.recv(40)
-    readable = data.decode(encoding="ascii")
-    print("Received: ", readable)
-    processed = readable.strip("$")
-    print("Strip padding: ", processed)
-    return processed
+    global tcp_command_buffer
+    try:
+        # Temporarily set a non-blocking mode to check for new data
+        sock.setblocking(False)
+        data = sock.recv(1024)  # Attempt to read more data
+        sock.setblocking(True)  # Revert to the original blocking mode
+
+        # Decode and append to buffer
+        tcp_command_buffer += data.decode('ascii')
+
+        # Process if delimiter is found
+        if '\n' in tcp_command_buffer:
+            command, tcp_command_buffer = tcp_command_buffer.split('\n', 1)
+            command = command.strip("$")  # Strip any '$' characters as in your original processing
+            print("Received: ", command)
+            return command
+    except BlockingIOError:
+        # No new data available; pass this iteration
+        pass
+    except s.timeout:
+        # Handle possible timeout exception if setblocking(false) wasn't enough
+        pass
+    except Exception as e:
+        print(f"Unexpected error receiving data: {e}")
+
+    # No complete command was processed
+    return None
 
 
 def closeClient(sock):
@@ -292,38 +377,128 @@ def closeClient(sock):
 
 
 def parseCommand(
-    command, view_control, camera_parameters, vis, geometry_dir, history, objectHandle
+    command, view_control, camera_parameters, vis,geometry_dir, history, objects_dict, main_window
 ):
     # FORMAT
     # [command] [subcommand]
 
     info = command.split(" ")
     print(info)
+    objectHandle = ""
+
+    # Check for selected objects in objects_dict and update objectHandle to point to the mesh if selected
+    for object_id, obj_info in objects_dict.items():
+        if obj_info.get('selected', False):  # Check if the 'selected' key exists and is True
+            objectHandle = obj_info['object']  # Now, objectHandle directly references the mesh object
+            print(f"Selected object: {object_id}")
+            break  # Assume only one object can be selected at a time; break after finding the first selected object
+     # Assume only one object can be selected at a time; break after finding the first selected object
+
+    if len(info) > 1:
+        main_window.update_text(info[1])  # Use the update_text method of the main window
 
     match info[0]:
         case "motion":
             if objectHandle == "":
-                handleCam(info[1:], view_control, history)
+                handleCam(info[1:], view_control, history, vis)
                 return ""
             else:
-                handleUpdateGeo(info[1:], geometry_dir, history, objectHandle)
+                handleUpdateGeo(info[1:], history, objectHandle, vis)
                 return ""
         case "select":
-            return handleSelection()
+            return handleSelection(vis, view_control, objects_dict)  # Assume this function handles object selection
         case "create":
-            handleNewGeo(info[1:], view_control, camera_parameters, vis, geometry_dir)
+            handleNewGeo(info[1:], view_control, camera_parameters, vis, objects_dict)
             return ""
         case "update":
-            handleUpdateGeo(info[1:], geometry_dir, history, objectHandle)
-            return ""
+            if objectHandle:
+                handleUpdateGeo(info[1:], history, objectHandle, vis)
         case "home":
             snap_isometric(vis, view_control)
         case "snap":
             snap_to_closest_plane(vis, view_control)
+
+    # Optionally return the updated objectHandle if you need to use it outside this function
+    return objectHandle
+
+
+
+
+def get_camera_look_at_position(view_control):
+    cam_params = view_control.convert_to_pinhole_camera_parameters()
+    
+    # Inverse of the view matrix gives the camera's orientation and position in world space
+    inverse_view_matrix = np.linalg.inv(cam_params.extrinsic)
+    
+    # Camera's position is the fourth column of the inverse view matrix
+    camera_position = inverse_view_matrix[:3, 3]
+    
+    # Assuming the camera looks along the -Z axis in its local space, transform this to world space
+    # This gives us the forward direction vector in world space
+    forward_direction = np.dot(inverse_view_matrix[:3, :3], np.array([0, 0, -1]))
+    
+    # Normalize the forward direction
+    forward_direction_normalized = forward_direction / np.linalg.norm(forward_direction)
+    
+    # Define a distance in front of the camera to place the "look-at" point
+    distance = 0.1  # This is arbitrary and can be adjusted as needed
+    
+    # Calculate the look-at point by moving along the camera's forward direction from its position
+    look_at_point = camera_position + distance * forward_direction_normalized
+    look_at_point[2] = 0.5
+    
+    return look_at_point
+
+
+
+def highlight_objects_near_camera_look_at(vis, view_control, objects_dict, vicinity_threshold=0.5):
+    """
+    Highlights objects that are within a certain vicinity of the camera's look-at point.
+    
+    Parameters:
+    - vis: Open3D visualization object.
+    - view_control: Open3D view control object associated with the vis.
+    - objects_dict: Dictionary of objects with their centers.
+    - vicinity_threshold: Distance threshold to consider an object near the camera's look-at point.
+    """
+    # Calculate the current look-at point of the camera
+    look_at_point = get_camera_look_at_position(view_control)
+    #add_visual_marker(vis, look_at_point, color=[1, 0, 0])
+    print(f"Camera look-at point: {look_at_point}")  # Debug statement
+    
+    # Iterate through each object in objects_dict
+    for object_id, info in objects_dict.items():
+        obj = info['object']
+        center = info['center']
+        print(f"Checking {object_id} at center {center}")  # Debug statement
         
+        # Calculate the distance from the object's center to the look-at point
+        distance = np.linalg.norm(np.array(center) - np.array(look_at_point))
+        print(f"Distance from look-at point to {object_id}: {distance}")  # Debug statement
+        
+        # If the object is within the vicinity threshold, highlight it
+        if distance <= vicinity_threshold:
+            print(f"{object_id} is within vicinity threshold and will be highlighted.")  # Debug statement
+            obj.paint_uniform_color([0.678, 1, 0.184])  # Light green
+            info['selected'] = True
+            vis.update_geometry(obj)
+
+            # Assuming vis.update_geometry(obj) is correctly handled as per your visualizer's capabilities
+            # Note: For the basic Visualizer, you might need to remove and re-add the object to see the color change.
+        else:
+            print(f"{object_id} is not within vicinity threshold and will not be highlighted.")  # Debug statement
+            info['selected'] = False
+
+            if ( obj.paint_uniform_color != [1,1,1]):
+                obj.paint_uniform_color([1, 1, 1])  # Reset to default color or another color of choice
+                vis.update_geometry(obj)
 
 
-def handleCam(subcommand, view_control, history):
+
+
+
+
+def handleCam(subcommand, view_control, history, vis):
 
     # FORMAT:
     # start [operation] [axis] [position]
@@ -365,8 +540,8 @@ def handleCam(subcommand, view_control, history):
                     deltaZ = (float(splitCoords[1]) - float(oldCoords[1])) * alphaM
                     move_camera_v3(view_control, [deltaY, deltaZ])
 
-                    #delta = float(subcommand[2]) - float(history["lastVal"])
-                    #move_camera_v2(view_control, history["axis"], delta * alphaM)
+                    highlight_objects_near_camera_look_at(vis, view_control, objects_dict)
+                    
                 case "rotate":
                     print("camera rotate update")
                     delta = float(subcommand[2]) - float(history["lastVal"])
@@ -484,40 +659,57 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, geometry_dir)
                 vis.update_geometry(pcd)
                 vis.update_geometry(ls)
 
+def handleUpdateGeo(subcommand, history, objectHandle, vis):
+    alphaM = 0.01  # Translation scaling factor
+    alphaR = 1  # Rotation scaling factor (in radians for Open3D)
+    alphaS = 1  # Scaling scaling factor
 
-def handleUpdateGeo(subcommand, geometryDir, history, objectHandle):
-
-    alphaM = 1  # translation scaling factor
-    alphaR = 1  # rotation scaling factor
-    alphaS = 1  # scaling scaling factor
-
-    match subcommand[0]:
+    match subcommand[1]:
         case "start":
-            print("starting motion")
-            history["operation"] = subcommand[1]
-            history["axis"] = subcommand[2]
-            history["lastVal"] = subcommand[3]
+            print("Starting motion")
+            history["operation"] = subcommand[0]  # Operation type
+            history["axis"] = subcommand[2] if len(subcommand) > 2 else None  # Axis, if applicable
+            history["lastVal"] = subcommand[3] if len(subcommand) > 3 else None  # Starting value, if applicable
         case "end":
-            print("ending motion")
+            print("Ending motion")
+            # Reset the history after operation ends
             history["operation"] = ""
             history["axis"] = ""
             history["lastVal"] = ""
         case "position":
-            print("update position")
-            delta = subcommand[1] - history["lastVal"]
-            thisGeo = geometryDir[objectHandle]
-            match history["operation"]:
-                case "move":  # treat zoom as relative frame z-axis translation
-                    arr = axis2arr(history["axis"], delta, alphaM)
-                    thisGeo.translate(np.array(arr))
-                case "rotate":
-                    arr = axis2arr(history["axis"], delta, alphaR)
-                    R = thisGeo.get_rotation_matrix_from_axis_angle(np.array(arr))
-                    thisGeo.rotate(R, center=(0, 0, 0))  # investigate how center works
-                case "scale":
-                    thisGeo.scale(delta * alphaS, center=thisGeo.get_center())
+            if objectHandle:
+                print("Updating position or transformation")
+                # Assuming subcommand[2] is something like "(395,166)"
+                try:
+                    # Extract numerical values from the command
+                    # This splits the string by comma after removing parentheses, then converts each part to float
+                    coords = subcommand[2].strip("()").split(",")
+                    currentX = float(coords[0])
+                    currentY = float(coords[1])
+                    
+                    oldCoords = history["lastVal"].strip("()").split(",")
+                    
+                    oldX = float(oldCoords[0])
+                    oldY = float(oldCoords[1])
+                    
+
+                    
+                    deltaX = (currentX - oldX) * alphaM
+                    deltaY = (currentY - oldY) * alphaM
+                    objectHandle.translate(np.array([deltaX, -deltaY, 0]), relative=True)
+                    print("translating object by ", deltaX, "and", deltaY)
+                    
+                    # Update history with the current values for continuous operations
+                    history["lastX"] = currentX
+                    history["lastY"] = currentY
+                    vis.update_geometry(objectHandle)
+                except Exception as e:
+                    print(f"Error processing numerical values from command: {e}")
+                    
+            history["lastVal"] = subcommand[2]
+
         case _:
-            print("INVALID COMMAND")
+            print("Invalid command")
 
 
 def handleSelection():
@@ -527,18 +719,53 @@ def handleSelection():
     return
 
 
+def handle_commands(clientSocket, vis, view_control, camera_parameters, geometry_dir, history, objects_dict, main_window):
+    try:
+        # Attempt to receive data, but don't block indefinitely
+        clientSocket.settimeout(0.1)  # Non-blocking with timeout
+        command = getTCPData(clientSocket)
+        if command:
+            # Parse and handle the command
+            parseCommand(command, view_control, camera_parameters, vis, geometry_dir, history, objects_dict, main_window)
+            vis.poll_events()
+            vis.update_renderer()
+    except s.timeout:
+        # Ignore timeout exceptions, which are expected due to non-blocking call
+        pass
+    except Exception as e:
+        # Log or print other unexpected exceptions
+        print(f"Unexpected error handling command: {e}")
+    finally:
+        clientSocket.settimeout(None)  # Reset to blocking mode
+
+
+
+
 # ----------------------------------------------------------------------------------------
 # MAIN
 # ----------------------------------------------------------------------------------------
 
 
 def main():
-
+    app = QtWidgets.QApplication(sys.argv)
+    
+    stylesheet = """
+        QMainWindow {
+            background-color: #f2f2f2;
+            font-family: Arial;
+        }
+        QLabel {
+            color: #333;
+            font-size: 20px;
+        }
+        /* Add more styles for other widgets */
+        """
+    app.setStyleSheet(stylesheet)
     serverSocket = startServer()
     clientSocket = makeConnection(serverSocket);
 
 
-    #clientSocket = startClient() #for fake TCP server
+   # clientSocket = startClient() #for fake TCP server
     camera_parameters = o3d.camera.PinholeCameraParameters()
 
     width = 1280
@@ -570,46 +797,40 @@ def main():
     mesh = o3d.geometry.TriangleMesh.create_box(width=0.2, height=0.2, depth=0.2)
     mesh.compute_vertex_normals()
 
+
+    mesh2 = o3d.geometry.TriangleMesh.create_box(width=0.2, height=0.4, depth=0.2)
+    mesh2.compute_vertex_normals()
+    mesh2.translate(np.array([0.3, 0.5, 0.3]))
+
     # create visualizer and window.
     vis = o3d.visualization.Visualizer()
     vis.create_window(
         window_name="Open3D", width=width, height=height, left=50, top=50, visible=True
     )
     vis.add_geometry(mesh)
+    vis.add_geometry(mesh2)
+
+
+    objects_dict['object_1'] = {'object': mesh, 'center': mesh.get_center(), 'selected' : False}
+    objects_dict['object_2'] = {'object': mesh2, 'center': mesh2.get_center(), 'selected' : False}
+
+
 
     view_control = vis.get_view_control()
 
-    i = 1  # temp
-
-    geometry_dir = {
-        "counters": {"pcd": 0, "ls": 0, "mesh": 0}
-    }  # may need to be changed depending on how selection works
-
+    # Initialize required dictionaries and parameters
+    geometry_dir = {"counters": {"pcd": 0, "ls": 0, "mesh": 0}}
     history = {"operation": "", "axis": "", "lastVal": ""}
-    objectHandle = ""
 
-    pcd_counter = 0  # number of pointclouds # remove
-    ls_counter = 0  # number of linesets # remove
-    mesh_counter = 0  # number of meshes # remove
+    main_window = MainWindow(vis)
+    main_window.show()
 
-    while True:
-        # queue system? threading?
-        command = getTCPData(clientSocket)
+    # Setup a QTimer to periodically check for new commands
+    timer = QtCore.QTimer()
+    timer.timeout.connect(lambda: handle_commands(clientSocket, vis, view_control, camera_parameters, geometry_dir, history, objects_dict, main_window))
+    timer.start(1)  # Check every 100 milliseconds
 
-        objectHandle = parseCommand(
-            command,
-            view_control,
-            camera_parameters,
-            vis,
-            geometry_dir,
-            history,
-            objectHandle,
-        )
-
-        vis.poll_events()
-        vis.update_renderer()
-
-    vis.destroy_window()
+    sys.exit(app.exec_())
 
 
 if __name__ == "__main__":

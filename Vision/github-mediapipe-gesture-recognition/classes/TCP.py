@@ -5,7 +5,7 @@ import socket
 class TCPCommunication:
     def __init__(self, gesture_processing):
         self.host = "localhost"
-        self.port = 4446
+        self.port = 4445
         self.connect()
         self.gesture_processing = gesture_processing
 
@@ -21,6 +21,7 @@ class TCPCommunication:
 
     # Send command
     def send_command(self, command):
+        command = command + '\n'
         if self.connection:
             try:
                 self.connection.sendall(command.encode(encoding="ascii"))

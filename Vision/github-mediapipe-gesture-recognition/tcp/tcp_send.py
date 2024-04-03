@@ -2,7 +2,7 @@ import socket
 
 
 class TCPClient:
-    def __init__(self, host="localhost", port=4444):
+    def __init__(self, host="localhost", port=4445):
         self.host = host
         self.port = port
         self.connection = None
@@ -17,6 +17,7 @@ class TCPClient:
             self.connection = None
 
     def send_gesture(self, gesture_name):
+        gesture_name = gesture_name + '\n'
         if self.connection:
             try:
                 self.connection.sendall(gesture_name.encode(encoding="ascii"))
