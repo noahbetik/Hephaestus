@@ -28,6 +28,10 @@ from PySide6.QtGui import QFont
 
 objects_dict = {}
 curr_highlighted = False
+prevRotated = False
+marker = o3d.geometry.TriangleMesh.create_sphere(radius=0.02)
+
+
 
 
 
@@ -383,7 +387,7 @@ def parseCommand(
     # FORMAT
     # [command] [subcommand]
 
-
+    global prevRotated
     info = command.split(" ")
     print(info)
     objectHandle = ""
@@ -406,6 +410,8 @@ def parseCommand(
                 handleCam(info[1:], view_control, history, vis)
                 return ""
             else:
+                if (prevRotated) : snap_to_closest_plane(vis, view_control)
+                prevRotated = False
                 handleUpdateGeo(info[1:], history, objectHandle, vis)
                 return ""
         case "select":
@@ -417,6 +423,8 @@ def parseCommand(
             return ""
         case "update":
             if objectHandle:
+                if (prevRotated) : snap_to_closest_plane(vis, view_control)
+                prevRotated = False
                 handleUpdateGeo(info[1:], history, objectHandle, vis)
         case "home":
             snap_isometric(vis, view_control)
@@ -466,8 +474,17 @@ def highlight_objects_near_camera_look_at(vis, view_control, objects_dict, vicin
     - objects_dict: Dictionary of objects with their centers.
     - vicinity_threshold: Distance threshold to consider an object near the camera's look-at point.
     """
+    
+    global marker
+
+
+    
+    
     # Calculate the current look-at point of the camera
     look_at_point = get_camera_look_at_position(view_control)
+    
+    marker.translate(look_at_point - np.asarray(marker.get_center()), relative=False)  # Move the sphere to the look_at_point
+    vis.update_geometry(marker)
     #add_visual_marker(vis, look_at_point, color=[1, 0, 0])
     print(f"Camera look-at point: {look_at_point}")  # Debug statement
     
@@ -507,6 +524,8 @@ def highlight_objects_near_camera_look_at(vis, view_control, objects_dict, vicin
 
 
 def handleCam(subcommand, view_control, history, vis):
+    
+    global prevRotated
 
     # FORMAT:
     # start [operation] [axis] [position]
@@ -551,6 +570,7 @@ def handleCam(subcommand, view_control, history, vis):
                     highlight_objects_near_camera_look_at(vis, view_control, objects_dict)
                     
                 case "rotate":
+                    prevRotated = True
                     print("camera rotate update")
                     delta = float(subcommand[2]) - float(history["lastVal"])
                     rotate_camera(view_control, history["axis"], degrees=delta * alphaR)
@@ -776,6 +796,8 @@ def handle_commands(clientSocket, vis, view_control, camera_parameters, geometry
 
 
 def main():
+    
+    global marker
     app = QtWidgets.QApplication(sys.argv)
     
     stylesheet = """
@@ -839,6 +861,13 @@ def main():
     vis.add_geometry(mesh)
     vis.add_geometry(mesh2)
     vis.get_render_option().background_color = np.array([0.8, 0.9, 1.0])
+    
+    
+    marker_color = [1, 0, 0]  # Red color for the marker
+    marker.paint_uniform_color(marker_color)  # Color the marker
+    
+    vis.add_geometry(marker)
+
 
 
     objects_dict['object_1'] = {'object': mesh, 'center': mesh.get_center(), 'highlighted' : False, 'selected' : False}
