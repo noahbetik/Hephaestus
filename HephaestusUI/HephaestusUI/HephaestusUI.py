@@ -377,16 +377,25 @@ def closeClient(sock):
 
 
 def parseCommand(
-    command, view_control, camera_parameters, vis, geometry_dir, history, objectHandle, main_window
+    command, view_control, camera_parameters, vis,geometry_dir, history, objects_dict, main_window
 ):
     # FORMAT
     # [command] [subcommand]
 
     info = command.split(" ")
     print(info)
+    objectHandle = ""
+
+    # Check for selected objects in objects_dict and update objectHandle to point to the mesh if selected
+    for object_id, obj_info in objects_dict.items():
+        if obj_info.get('selected', False):  # Check if the 'selected' key exists and is True
+            objectHandle = obj_info['object']  # Now, objectHandle directly references the mesh object
+            print(f"Selected object: {object_id}")
+            break  # Assume only one object can be selected at a time; break after finding the first selected object
+     # Assume only one object can be selected at a time; break after finding the first selected object
 
     if len(info) > 1:
-            main_window.update_text(info[1])  # Use the update_text method of the main window
+        main_window.update_text(info[1])  # Use the update_text method of the main window
 
     match info[0]:
         case "motion":
@@ -394,21 +403,23 @@ def parseCommand(
                 handleCam(info[1:], view_control, history, vis)
                 return ""
             else:
-                handleUpdateGeo(info[1:], geometry_dir, history, objectHandle)
+                handleUpdateGeo(info[1:], history, objectHandle, vis)
                 return ""
         case "select":
-            return handleSelection()
+            return handleSelection(vis, view_control, objects_dict)  # Assume this function handles object selection
         case "create":
-            handleNewGeo(info[1:], view_control, camera_parameters, vis, geometry_dir)
+            handleNewGeo(info[1:], view_control, camera_parameters, vis, objects_dict)
             return ""
         case "update":
-            handleUpdateGeo(info[1:], geometry_dir, history, objectHandle)
-            return ""
+            if objectHandle:
+                handleUpdateGeo(info[1:], history, objectHandle, vis)
         case "home":
             snap_isometric(vis, view_control)
         case "snap":
             snap_to_closest_plane(vis, view_control)
-        
+
+    # Optionally return the updated objectHandle if you need to use it outside this function
+    return objectHandle
 
 
 
@@ -439,29 +450,6 @@ def get_camera_look_at_position(view_control):
     return look_at_point
 
 
-def add_visual_marker(vis, point, radius=0.02, color=[1, 0, 0]):
-    """
-    Adds a visual marker (a small sphere) at the specified point in the scene.
-
-    Parameters:
-    - vis: The Open3D visualizer object.
-    - point: The [x, y, z] coordinates where the marker should be placed.
-    - radius: The radius of the sphere used as a marker.
-    - color: The color of the marker, specified as [r, g, b] components.
-    """
-    # Create a sphere at the origin
-    marker = o3d.geometry.TriangleMesh.create_sphere(radius=radius)
-    marker.compute_vertex_normals()
-    
-    # Move the sphere to the specified point
-    translation = np.array(point) - np.array(marker.get_center())
-    marker.translate(translation)
-    
-    # Color the marker
-    marker.paint_uniform_color(color)
-    
-    # Add the marker to the visualizer
-    vis.add_geometry(marker)
 
 def highlight_objects_near_camera_look_at(vis, view_control, objects_dict, vicinity_threshold=0.5):
     """
@@ -492,42 +480,23 @@ def highlight_objects_near_camera_look_at(vis, view_control, objects_dict, vicin
         if distance <= vicinity_threshold:
             print(f"{object_id} is within vicinity threshold and will be highlighted.")  # Debug statement
             obj.paint_uniform_color([0.678, 1, 0.184])  # Light green
+            info['selected'] = True
             vis.update_geometry(obj)
 
             # Assuming vis.update_geometry(obj) is correctly handled as per your visualizer's capabilities
             # Note: For the basic Visualizer, you might need to remove and re-add the object to see the color change.
         else:
             print(f"{object_id} is not within vicinity threshold and will not be highlighted.")  # Debug statement
-            obj.paint_uniform_color([1, 1, 1])  # Reset to default color or another color of choice
-            vis.update_geometry(obj)
+            info['selected'] = False
+
+            if ( obj.paint_uniform_color != [1,1,1]):
+                obj.paint_uniform_color([1, 1, 1])  # Reset to default color or another color of choice
+                vis.update_geometry(obj)
 
 
 
-    # Note: Depending on your Open3D version and the visualizer used, you might need to manually refresh the visualizer.
 
 
-def make_object_green(vis, object_id, objects_dict):
-    """
-    Looks for the specified object ID in the objects dictionary and changes its color to light green if found.
-    The function assumes each entry in objects_dict is a dictionary with an 'object' key holding the geometry object.
-    
-    Parameters:
-    - object_id: The ID of the object to change color (e.g., 'object_1').
-    - objects_dict: Dictionary containing the objects and their centers, where keys are object IDs.
-    """
-    # Check if the specified object ID is in the dictionary
-    if object_id in objects_dict:
-        # Retrieve the nested dictionary for the object
-        obj_info = objects_dict[object_id]
-        obj = obj_info['object']  # Access the actual Open3D geometry object
-        # Change the object's color to light green
-        obj.paint_uniform_color([0.678, 1, 0.184])  # Light green
-        vis.update_geometry(obj)
-
-        print(f"Changed color of {object_id} to light green.")
-        
-    else:
-        print(f"{object_id} not found in objects dictionary.")
 
 def handleCam(subcommand, view_control, history, vis):
 
@@ -570,21 +539,9 @@ def handleCam(subcommand, view_control, history, vis):
                     deltaY = (float(splitCoords[0]) - float(oldCoords[0])) * alphaM
                     deltaZ = (float(splitCoords[1]) - float(oldCoords[1])) * alphaM
                     move_camera_v3(view_control, [deltaY, deltaZ])
-                    #make_object_green(vis, 'object_1', objects_dict)
 
-
-
-
-                    #get_camera_position_and_look_at(view_control)
                     highlight_objects_near_camera_look_at(vis, view_control, objects_dict)
                     
-        #  print(f"current centre {center}")
-        #             for object_id, center in objects_dict.items():
-        #                 print(f"{object_id}: Center = {center}")
-           
-
-                    #delta = float(subcommand[2]) - float(history["lastVal"])
-                    #move_camera_v2(view_control, history["axis"], delta * alphaM)
                 case "rotate":
                     print("camera rotate update")
                     delta = float(subcommand[2]) - float(history["lastVal"])
@@ -702,40 +659,57 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, geometry_dir)
                 vis.update_geometry(pcd)
                 vis.update_geometry(ls)
 
+def handleUpdateGeo(subcommand, history, objectHandle, vis):
+    alphaM = 0.01  # Translation scaling factor
+    alphaR = 1  # Rotation scaling factor (in radians for Open3D)
+    alphaS = 1  # Scaling scaling factor
 
-def handleUpdateGeo(subcommand, geometryDir, history, objectHandle):
-
-    alphaM = 1  # translation scaling factor
-    alphaR = 1  # rotation scaling factor
-    alphaS = 1  # scaling scaling factor
-
-    match subcommand[0]:
+    match subcommand[1]:
         case "start":
-            print("starting motion")
-            history["operation"] = subcommand[1]
-            history["axis"] = subcommand[2]
-            history["lastVal"] = subcommand[3]
+            print("Starting motion")
+            history["operation"] = subcommand[0]  # Operation type
+            history["axis"] = subcommand[2] if len(subcommand) > 2 else None  # Axis, if applicable
+            history["lastVal"] = subcommand[3] if len(subcommand) > 3 else None  # Starting value, if applicable
         case "end":
-            print("ending motion")
+            print("Ending motion")
+            # Reset the history after operation ends
             history["operation"] = ""
             history["axis"] = ""
             history["lastVal"] = ""
         case "position":
-            print("update position")
-            delta = subcommand[1] - history["lastVal"]
-            thisGeo = geometryDir[objectHandle]
-            match history["operation"]:
-                case "move":  # treat zoom as relative frame z-axis translation
-                    arr = axis2arr(history["axis"], delta, alphaM)
-                    thisGeo.translate(np.array(arr))
-                case "rotate":
-                    arr = axis2arr(history["axis"], delta, alphaR)
-                    R = thisGeo.get_rotation_matrix_from_axis_angle(np.array(arr))
-                    thisGeo.rotate(R, center=(0, 0, 0))  # investigate how center works
-                case "scale":
-                    thisGeo.scale(delta * alphaS, center=thisGeo.get_center())
+            if objectHandle:
+                print("Updating position or transformation")
+                # Assuming subcommand[2] is something like "(395,166)"
+                try:
+                    # Extract numerical values from the command
+                    # This splits the string by comma after removing parentheses, then converts each part to float
+                    coords = subcommand[2].strip("()").split(",")
+                    currentX = float(coords[0])
+                    currentY = float(coords[1])
+                    
+                    oldCoords = history["lastVal"].strip("()").split(",")
+                    
+                    oldX = float(oldCoords[0])
+                    oldY = float(oldCoords[1])
+                    
+
+                    
+                    deltaX = (currentX - oldX) * alphaM
+                    deltaY = (currentY - oldY) * alphaM
+                    objectHandle.translate(np.array([deltaX, -deltaY, 0]), relative=True)
+                    print("translating object by ", deltaX, "and", deltaY)
+                    
+                    # Update history with the current values for continuous operations
+                    history["lastX"] = currentX
+                    history["lastY"] = currentY
+                    vis.update_geometry(objectHandle)
+                except Exception as e:
+                    print(f"Error processing numerical values from command: {e}")
+                    
+            history["lastVal"] = subcommand[2]
+
         case _:
-            print("INVALID COMMAND")
+            print("Invalid command")
 
 
 def handleSelection():
@@ -745,14 +719,14 @@ def handleSelection():
     return
 
 
-def handle_commands(clientSocket, vis, view_control, camera_parameters, geometry_dir, history, objectHandle, main_window):
+def handle_commands(clientSocket, vis, view_control, camera_parameters, geometry_dir, history, objects_dict, main_window):
     try:
         # Attempt to receive data, but don't block indefinitely
         clientSocket.settimeout(0.1)  # Non-blocking with timeout
         command = getTCPData(clientSocket)
         if command:
             # Parse and handle the command
-            parseCommand(command, view_control, camera_parameters, vis, geometry_dir, history, objectHandle, main_window)
+            parseCommand(command, view_control, camera_parameters, vis, geometry_dir, history, objects_dict, main_window)
             vis.poll_events()
             vis.update_renderer()
     except s.timeout:
@@ -837,8 +811,8 @@ def main():
     vis.add_geometry(mesh2)
 
 
-    objects_dict['object_1'] = {'object': mesh, 'center': mesh.get_center()}
-    objects_dict['object_2'] = {'object': mesh2, 'center': mesh2.get_center()}
+    objects_dict['object_1'] = {'object': mesh, 'center': mesh.get_center(), 'selected' : False}
+    objects_dict['object_2'] = {'object': mesh2, 'center': mesh2.get_center(), 'selected' : False}
 
 
 
@@ -847,14 +821,13 @@ def main():
     # Initialize required dictionaries and parameters
     geometry_dir = {"counters": {"pcd": 0, "ls": 0, "mesh": 0}}
     history = {"operation": "", "axis": "", "lastVal": ""}
-    objectHandle = ""
 
     main_window = MainWindow(vis)
     main_window.show()
 
     # Setup a QTimer to periodically check for new commands
     timer = QtCore.QTimer()
-    timer.timeout.connect(lambda: handle_commands(clientSocket, vis, view_control, camera_parameters, geometry_dir, history, objectHandle, main_window))
+    timer.timeout.connect(lambda: handle_commands(clientSocket, vis, view_control, camera_parameters, geometry_dir, history, objects_dict, main_window))
     timer.start(1)  # Check every 100 milliseconds
 
     sys.exit(app.exec_())
