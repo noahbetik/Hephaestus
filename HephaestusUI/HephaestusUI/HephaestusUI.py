@@ -486,8 +486,8 @@ def highlight_objects_near_camera_look_at(vis, view_control, objects_dict, vicin
             print(f"{object_id} is within vicinity threshold and will be highlighted.")  # Debug statement
             curr_highlighted = True
             
-            if (obj.paint_uniform_color != [0.678, 1, 0.184]) :
-                obj.paint_uniform_color([0.678, 1, 0.184])  # Light green
+            if (obj.paint_uniform_color != [0.640, 0.91, 0.62]) :
+                obj.paint_uniform_color([0.640, 0.91, 0.62])  # Light green
                 info['highlighted'] = True
                 vis.update_geometry(obj)
 
@@ -726,7 +726,7 @@ def handleSelection(objects_dict, vis, main_window):
         if obj_info.get('highlighted', False):  # Check if the 'highlighted' key exists and is True
             obj_info['selected'] = True
             obj = obj_info['object']  # Correctly reference the Open3D object
-            obj.paint_uniform_color([0, 0.5, 0])  # Paint the object dark green
+            obj.paint_uniform_color([0.540, 0.68, 0.52])  # Paint the object darker green
             vis.update_geometry(obj)
             print(f"Object {object_id} selected")
             main_window.update_text(f"Object {object_id} selected")
@@ -740,7 +740,7 @@ def handleDeselection(objects_dict, vis, main_window):
             obj_info['selected'] = False  # Mark the object as deselected
             obj_info['highlighted'] = False  # Mark the object as deselected
             obj = obj_info['object']  # Correctly reference the Open3D object
-            obj.paint_uniform_color([0.5, 0.5, 0.5])  # Reset the object color to white
+            obj.paint_uniform_color([0.5, 0.5, 0.5])  # Reset the object color to grey
             vis.update_geometry(obj)
             print(f"Object {object_id} deselected")
             main_window.update_text(f"Object {object_id} deselected")
@@ -838,6 +838,7 @@ def main():
     )
     vis.add_geometry(mesh)
     vis.add_geometry(mesh2)
+    vis.get_render_option().background_color = np.array([0.8, 0.9, 1.0])
 
 
     objects_dict['object_1'] = {'object': mesh, 'center': mesh.get_center(), 'highlighted' : False, 'selected' : False}

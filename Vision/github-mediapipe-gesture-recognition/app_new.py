@@ -260,6 +260,9 @@ def main():
                         if num_of_hands == 2 and dual_gesture_name is not None
                         else single_gesture_name
                     )
+                    if (gesture_name == "Thumbs Up" or gesture_name == "Thumbs Down"): 
+                        frame_threshold = 10
+                    else: frame_threshold = 20
                     sys.stdout.write(
                         f"\rGesture: {gesture_name}, Frames: {frame_counter}, Confidence: {confidence:.5f}"
                     )
