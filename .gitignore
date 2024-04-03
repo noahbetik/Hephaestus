@@ -62,7 +62,7 @@ sysinfo.txt
 *.aab
 *.unitypackage
 *.app
-*.pcy
+*.pyc
 
 # Crashlytics generated file
 crashlytics-build.properties
