@@ -10,6 +10,9 @@ from scipy.spatial.transform import Slerp
 from PySide6 import QtWidgets, QtGui, QtCore
 from PySide6.QtGui import QFont
 
+from camera_configs import predefined_extrinsics
+
+
 
 # ----------------------------------------------------------------------------------------
 # SHORTCUTS
@@ -31,6 +34,7 @@ curr_highlighted = False
 prevRotated = False
 prevSnapped = False
 marker = o3d.geometry.TriangleMesh.create_sphere(radius=0.02)
+previous_look_at_point = None
 
 
 
@@ -91,15 +95,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.text_display_widget.setText(new_text)
 
 
-predefined_extrinsics = {
-    'front': np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]]),
-    'left': np.array([[0, 0, 1], [0, -1, 0], [1, 0, 0]]),
-    'right': np.array([[0, 0, -1], [0, -1, 0], [-1, 0, 0]]),
-    'topdown': np.array([[1, 0, 0], [0, 0, 1], [0, -1, 0]]),
-    'bottom': np.array([[1, 0, 0], [0, 0, -1], [0, 1, 0]]),
-    'behind': np.array([[-1, 0, 0], [0, -1, 0], [0, 0, 1]]),
-    'behindv2': np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
-} 
+
 
 def snap_to_closest_plane(vis, view_control):
     global prevSnapped
@@ -421,8 +417,8 @@ def parseCommand(
                 handleCam(info[1:], view_control, history, vis)
                 return ""
             else:
-                if (prevRotated) : snap_to_closest_plane(vis, view_control)
-                prevRotated = False
+                # if (prevRotated) : snap_to_closest_plane(vis, view_control)
+                # prevRotated = False
                 handleUpdateGeo(info[1:], history, objectHandle, vis)
                 return ""
         case "select":
@@ -433,9 +429,9 @@ def parseCommand(
             handleNewGeo(info[1:], view_control, camera_parameters, vis, objects_dict)
             return ""
         case "update":
-            if objectHandle:
-                if (prevRotated) : snap_to_closest_plane(vis, view_control)
-                prevRotated = False
+            # if objectHandle:
+            #     if (prevRotated) : snap_to_closest_plane(vis, view_control)
+            #     prevRotated = False
                 handleUpdateGeo(info[1:], history, objectHandle, vis)
         case "home":
             snap_isometric(vis, view_control)
@@ -478,99 +474,97 @@ def get_camera_look_at_position(view_control):
 
 def get_camera_look_at_position_v2(view_control):
     cam_params = view_control.convert_to_pinhole_camera_parameters()
-    
-    # Get the view matrix and invert it to get the camera's orientation and position
-    view_matrix = np.linalg.inv(cam_params.extrinsic)
-    
-    # The forward direction is the third column of the rotation matrix
-    forward_direction = -view_matrix[:3, 2]
-    
-    # The camera's position is the translation part of the view matrix
-    camera_position = view_matrix[:3, 3]
-    
-    # Distance to the look-at point from the camera
+    inverse_view_matrix = np.linalg.inv(cam_params.extrinsic)
+    forward_direction = -inverse_view_matrix[:3, 2]
+    camera_position = inverse_view_matrix[:3, 3]
     distance = 0.1
-    
-    # Calculate the look-at point
     look_at_point = camera_position + (forward_direction * distance)
-    
     return look_at_point
 
+def update_marker_position(marker, current_look_at_point):
+    global previous_look_at_point
 
+    # Ensure the previous look_at_point is not None
+    if previous_look_at_point is not None:
+        # Calculate the translation delta
+        translation_delta = current_look_at_point - previous_look_at_point
 
-def update_marker_position(marker, look_at_point):
-    # Get the vertices of the marker's mesh
-    vertices = np.asarray(marker.vertices)
-    # Calculate the translation needed to move the marker's center to the look_at_point
-    translation = look_at_point - np.mean(vertices, axis=0)
-    # Apply the translation to each vertex
-    new_vertices = vertices + translation
-    marker.vertices = o3d.utility.Vector3dVector(new_vertices)
-    # No need to call translate since we directly set the vertices
-    marker.compute_vertex_normals() # Recompute normals in case lighting effects are being used
+        # Get the vertices of the marker's mesh
+        vertices = np.asarray(marker.vertices)
 
+        # Apply the translation delta to each vertex
+        new_vertices = vertices + translation_delta
+        marker.vertices = o3d.utility.Vector3dVector(new_vertices)
 
-def highlight_objects_near_camera_look_at(vis, view_control, objects_dict, vicinity_threshold=0.5):
-    """
-    Highlights objects that are within a certain vicinity of the camera's look-at point.
-    
-    Parameters:
-    - vis: Open3D visualization object.
-    - view_control: Open3D view control object associated with the vis.
-    - objects_dict: Dictionary of objects with their centers.
-    - vicinity_threshold: Distance threshold to consider an object near the camera's look-at point.
-    """
-    
+        # Recompute normals in case lighting effects are being used
+        marker.compute_vertex_normals()
+    else:
+        # If there's no previous point (i.e., the first frame), don't move the marker
+        pass
+
+    # Update the global or class attribute to the current look_at_point for the next iteration
+    previous_look_at_point = current_look_at_point
+
+def highlight_object(geometry, color=[1, 0, 0]):  # Default highlight color is red
+    geometry.paint_uniform_color(color)
+
+def compute_distance(point1, point2):
+    return np.linalg.norm(point1 - point2)
+
+def highlight_objects_near_camera(vis, view_control, objects_dict):
     global marker
+    # Get the camera position from the view control
+    cam_params = view_control.convert_to_pinhole_camera_parameters()
+    camera_position = np.asarray(cam_params.extrinsic[:3, 3])
+    camera_position = camera_position + np.array([0, -0.1, 0])
+    
+    # update_marker_position(marker,camera_position)
+    # vis.update_geometry(marker)
 
+    # Initialize the closest distance and the object
+    closest_distance = np.inf
+    closest_object_id = None
 
-    
-    
-    # Calculate the current look-at point of the camera
-    look_at_point = get_camera_look_at_position(view_control)
-    update_marker_position(marker, look_at_point)
-    vis.update_geometry(marker)
-    #add_visual_marker(vis, look_at_point, color=[1, 0, 0])
-    print(f"Camera look-at point: {look_at_point}")  # Debug statement
-    
-    # Iterate through each object in objects_dict
+    # Find the object closest to the camera
     for object_id, info in objects_dict.items():
         obj = info['object']
-        center = info['center']
-        print(f"Checking {object_id} at center {center}")  # Debug statement
-        
-        # Calculate the distance from the object's center to the look-at point
-        distance = np.linalg.norm(np.array(center) - np.array(look_at_point))
-        print(f"Distance from look-at point to {object_id}: {distance}")  # Debug statement
-        
-        # If the object is within the vicinity threshold, highlight it
-        if distance <= vicinity_threshold:
-            print(f"{object_id} is within vicinity threshold and will be highlighted.")  # Debug statement
-            curr_highlighted = True
-            
-            if (obj.paint_uniform_color != [0.640, 0.91, 0.62]) :
-                obj.paint_uniform_color([0.640, 0.91, 0.62])  # Light green
-                info['highlighted'] = True
-                vis.update_geometry(obj)
+        centroid = info['center']
 
-            # Assuming vis.update_geometry(obj) is correctly handled as per your visualizer's capabilities
-            # Note: For the basic Visualizer, you might need to remove and re-add the object to see the color change.
+        distance = compute_distance(camera_position, centroid)
+        
+        if distance < closest_distance:
+            closest_distance = distance
+            closest_object_id = object_id
+
+    # Highlight the closest object and unhighlight others
+    for object_id, info in objects_dict.items():
+        obj = info['object']
+        if object_id == closest_object_id:
+            # Highlight the closest object
+            highlight_object(obj, color=[0.640, 0.91, 0.62])  # Light green for highlighted object
+            info['highlighted'] = True
         else:
-            print(f"{object_id} is not within vicinity threshold and will not be highlighted.")  # Debug statement
+            # Unhighlight all other objects by resetting their color
+            highlight_object(obj, color=[0.5, 0.5, 0.5])  # Default color
             info['highlighted'] = False
-
-            if ( obj.paint_uniform_color != [0.5, 0.5, 0.5]):
-                obj.paint_uniform_color([0.5, 0.5, 0.5])  # Reset to default color or another color of choice
-                vis.update_geometry(obj)
-
+        
+        # Assuming vis.update_geometry(obj) will reflect the changes in the visualization
+        vis.update_geometry(obj)
 
 
+
+
+
+def removeGeometry(vis, object):
+    vis.remove_geometry(object)
+    return
 
 
 
 def handleCam(subcommand, view_control, history, vis):
     
     global prevRotated
+    global marker
 
     # FORMAT:
     # start [operation] [axis] [position]
@@ -602,6 +596,7 @@ def handleCam(subcommand, view_control, history, vis):
             history["operation"] = ""
             history["axis"] = ""
             history["lastVal"] = ""
+            return
         case "position":
             match history["operation"]:
                 case "pan":
@@ -612,14 +607,13 @@ def handleCam(subcommand, view_control, history, vis):
                     deltaZ = (float(splitCoords[1]) - float(oldCoords[1])) * alphaM
                     move_camera_v3(view_control, [deltaY, deltaZ])
 
-                    highlight_objects_near_camera_look_at(vis, view_control, objects_dict)
+                    highlight_objects_near_camera(vis, view_control, objects_dict)
                     
                 case "rotate":
                     prevRotated = True
                     print("camera rotate update")
                     delta = float(subcommand[2]) - float(history["lastVal"])
                     rotate_camera(view_control, history["axis"], degrees=delta * alphaR)
-                    highlight_objects_near_camera_look_at(vis, view_control, objects_dict)
 
                 case "zoom":
                     print("camera zoom update")
@@ -658,7 +652,8 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, geometry_dir)
             camera_parameters.extrinsic = current_view_matrix
             view_control.convert_from_pinhole_camera_parameters(camera_parameters, True)
         case "line":  # line handling not fully implemented yet
-            
+          #  print("**********SUBCOMMAND IS ",subcommand[1])
+          #currently broken right now because ML side is not sending the start command
             if subcommand[1] == "start":
                 pcd = o3d.geometry.PointCloud()
                 ls = o3d.geometry.LineSet()
@@ -751,6 +746,7 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis):
             history["operation"] = ""
             history["axis"] = ""
             history["lastVal"] = ""
+            return
         case "position":
             if objectHandle:
                 print("Updating position or transformation")
@@ -771,8 +767,21 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis):
                     
                     deltaX = (currentX - oldX) * alphaM
                     deltaY = (currentY - oldY) * alphaM
-                    objectHandle.translate(np.array([deltaX, -deltaY, 0]), relative=True)
-                    print("translating object by ", deltaX, "and", deltaY)
+                   # Retrieve the camera's rotation matrix
+                    view_control = vis.get_view_control()
+                    cam_params = view_control.convert_to_pinhole_camera_parameters()
+                    # For Open3D, the view matrix is cam_params.extrinsic, which includes rotation and translation
+                    # We only need the rotation part here
+                    rotation_matrix = np.linalg.inv(cam_params.extrinsic[:3, :3])
+
+                    # Transform the translation vector from view space to world space
+                    # Note: deltaY is negated to account for screen-to-world coordinate system change
+                    view_space_translation = np.array([deltaX, deltaY, 0])
+                    world_space_translation = rotation_matrix.dot(view_space_translation)
+                    
+                    # Apply the world-space translation to the object
+                    objectHandle.translate(world_space_translation, relative=True)
+                    print("Translating object by", world_space_translation)
                     
                     # Update history with the current values for continuous operations
                     history["lastX"] = currentX
@@ -828,9 +837,7 @@ def handle_commands(clientSocket, vis, view_control, camera_parameters, geometry
     except s.timeout:
         # Ignore timeout exceptions, which are expected due to non-blocking call
         pass
-    except Exception as e:
-        # Log or print other unexpected exceptions
-        print(f"Unexpected error handling command: {e}")
+  
     finally:
         clientSocket.settimeout(None)  # Reset to blocking mode
 
@@ -843,8 +850,8 @@ def handle_commands(clientSocket, vis, view_control, camera_parameters, geometry
 
 
 def main():
-    
     global marker
+    
     app = QtWidgets.QApplication(sys.argv)
     
     stylesheet = """
@@ -908,13 +915,11 @@ def main():
     vis.add_geometry(mesh)
     vis.add_geometry(mesh2)
     vis.get_render_option().background_color = np.array([0.8, 0.9, 1.0])
-    
-    
-    marker_color = [1, 0, 0]  # Red color for the marker
-    marker.paint_uniform_color(marker_color)  # Color the marker
-    
-    vis.add_geometry(marker)
 
+    # marker_color = [1, 0, 0]  # Red color for the marker
+    # marker.paint_uniform_color(marker_color)  # Color the marker
+
+    # vis.add_geometry(marker)
 
 
     objects_dict['object_1'] = {'object': mesh, 'center': mesh.get_center(), 'highlighted' : False, 'selected' : False}
