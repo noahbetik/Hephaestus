@@ -29,6 +29,7 @@ from PySide6.QtGui import QFont
 objects_dict = {}
 curr_highlighted = False
 prevRotated = False
+prevSnapped = False
 marker = o3d.geometry.TriangleMesh.create_sphere(radius=0.02)
 
 
@@ -96,10 +97,16 @@ predefined_extrinsics = {
     'right': np.array([[0, 0, -1], [0, -1, 0], [-1, 0, 0]]),
     'topdown': np.array([[1, 0, 0], [0, 0, 1], [0, -1, 0]]),
     'bottom': np.array([[1, 0, 0], [0, 0, -1], [0, 1, 0]]),
-    'behind': np.array([[-1, 0, 0], [0, -1, 0], [0, 0, 1]])
+    'behind': np.array([[-1, 0, 0], [0, -1, 0], [0, 0, 1]]),
+    'behindv2': np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
 } 
 
 def snap_to_closest_plane(vis, view_control):
+    global prevSnapped
+    
+    # if (prevSnapped): 
+    #     snap_isometric(vis, view_control) 
+    #     return
     cam_params = view_control.convert_to_pinhole_camera_parameters()
     current_extrinsic = cam_params.extrinsic
 
@@ -109,6 +116,7 @@ def snap_to_closest_plane(vis, view_control):
     #find closest match
     closest_match = None
     smallest_difference = np.inf
+    print("************current extrisnic: ", current_extrinsic)
 
 
     for name, rotation in predefined_extrinsics.items():
@@ -117,15 +125,17 @@ def snap_to_closest_plane(vis, view_control):
             closest_match = name
             smallest_difference = difference
             
-    print(f"Closest match: {closest_match}")
+    print(f"************Closest match: {closest_match}")
     
     updated_extrinsic = current_extrinsic.copy()
     updated_extrinsic[:3, :3] = predefined_extrinsics[closest_match]
 
     smooth_transition(vis, view_control, updated_extrinsic)
+    prevSnapped = True
 
 
 def snap_isometric(vis, view_control):
+    global prevSnapped
     # Obtain the current extrinsic parameters
     cam_params = view_control.convert_to_pinhole_camera_parameters()
     current_extrinsic = cam_params.extrinsic
@@ -141,6 +151,7 @@ def snap_isometric(vis, view_control):
     
     # Execute the smooth transition to the new isometric view
     smooth_transition(vis, view_control, target_extrinsic)
+    prevSnapped = False
 
 
 def convert_rotation_matrix_to_quaternion(rotation_matrix):
@@ -434,34 +445,69 @@ def parseCommand(
 
 
 
-
-
-
 def get_camera_look_at_position(view_control):
     cam_params = view_control.convert_to_pinhole_camera_parameters()
     
-    # Inverse of the view matrix gives the camera's orientation and position in world space
+    # The inverse of the view matrix gives the camera's orientation and position in world space
     inverse_view_matrix = np.linalg.inv(cam_params.extrinsic)
     
-    # Camera's position is the fourth column of the inverse view matrix
+    # The camera's position is the fourth column of the inverse view matrix
     camera_position = inverse_view_matrix[:3, 3]
     
-    # Assuming the camera looks along the -Z axis in its local space, transform this to world space
-    # This gives us the forward direction vector in world space
-    forward_direction = np.dot(inverse_view_matrix[:3, :3], np.array([0, 0, -1]))
+    # The forward direction vector should be the negative of the third column of the rotation matrix
+    forward_direction = -inverse_view_matrix[:3, 2]
     
     # Normalize the forward direction
     forward_direction_normalized = forward_direction / np.linalg.norm(forward_direction)
     
     # Define a distance in front of the camera to place the "look-at" point
-    distance = 0.1  # This is arbitrary and can be adjusted as needed
+    distance = 0.1  # Adjust as needed for your application
     
     # Calculate the look-at point by moving along the camera's forward direction from its position
     look_at_point = camera_position + distance * forward_direction_normalized
+    
     look_at_point[2] = 0.5
+    print(f"Look-at point: {look_at_point}")
+    print(f"Camera position: {camera_position}")
+    print(f"Forward direction: {forward_direction_normalized}")
     
     return look_at_point
 
+
+
+
+def get_camera_look_at_position_v2(view_control):
+    cam_params = view_control.convert_to_pinhole_camera_parameters()
+    
+    # Get the view matrix and invert it to get the camera's orientation and position
+    view_matrix = np.linalg.inv(cam_params.extrinsic)
+    
+    # The forward direction is the third column of the rotation matrix
+    forward_direction = -view_matrix[:3, 2]
+    
+    # The camera's position is the translation part of the view matrix
+    camera_position = view_matrix[:3, 3]
+    
+    # Distance to the look-at point from the camera
+    distance = 0.1
+    
+    # Calculate the look-at point
+    look_at_point = camera_position + (forward_direction * distance)
+    
+    return look_at_point
+
+
+
+def update_marker_position(marker, look_at_point):
+    # Get the vertices of the marker's mesh
+    vertices = np.asarray(marker.vertices)
+    # Calculate the translation needed to move the marker's center to the look_at_point
+    translation = look_at_point - np.mean(vertices, axis=0)
+    # Apply the translation to each vertex
+    new_vertices = vertices + translation
+    marker.vertices = o3d.utility.Vector3dVector(new_vertices)
+    # No need to call translate since we directly set the vertices
+    marker.compute_vertex_normals() # Recompute normals in case lighting effects are being used
 
 
 def highlight_objects_near_camera_look_at(vis, view_control, objects_dict, vicinity_threshold=0.5):
@@ -482,8 +528,7 @@ def highlight_objects_near_camera_look_at(vis, view_control, objects_dict, vicin
     
     # Calculate the current look-at point of the camera
     look_at_point = get_camera_look_at_position(view_control)
-    
-    marker.translate(look_at_point - np.asarray(marker.get_center()), relative=False)  # Move the sphere to the look_at_point
+    update_marker_position(marker, look_at_point)
     vis.update_geometry(marker)
     #add_visual_marker(vis, look_at_point, color=[1, 0, 0])
     print(f"Camera look-at point: {look_at_point}")  # Debug statement
@@ -574,6 +619,8 @@ def handleCam(subcommand, view_control, history, vis):
                     print("camera rotate update")
                     delta = float(subcommand[2]) - float(history["lastVal"])
                     rotate_camera(view_control, history["axis"], degrees=delta * alphaR)
+                    highlight_objects_near_camera_look_at(vis, view_control, objects_dict)
+
                 case "zoom":
                     print("camera zoom update")
                     delta = float(subcommand[2]) - float(history["lastVal"])
