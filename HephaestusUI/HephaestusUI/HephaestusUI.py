@@ -36,6 +36,8 @@ prevSnapped = False
 marker = o3d.geometry.TriangleMesh.create_sphere(radius=0.02)
 previous_look_at_point = None
 zoomFactor = 0.3
+extrusion_distance = 0
+direction = [0,0,1]
 
 
 
@@ -508,6 +510,13 @@ def removeGeometry(vis, object):
     vis.remove_geometry(object)
     return
 
+def addGeometry(vis, obj):
+    obj.paint_uniform_color([0.5, 0.5, 0.5])  # Reset the object color to grey
+    vis.add_geometry(obj)
+    return
+              
+
+
 def scale_object(objectHandle, delta):
     scaleFactor = 1 + delta
     
@@ -646,7 +655,7 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, geometry_dir)
             )
             new_box.compute_vertex_normals()
             new_box.translate(np.array(coords))
-            vis.add_geometry(new_box)
+            addGeometry(vis,new_box)
             name = "mesh" + str(geometry_dir["counters"]["mesh"])
             geometry_dir[name] = new_box
             geometry_dir["counters"]["mesh"] += 1
@@ -739,6 +748,10 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
     alphaM = 0.01  # Translation scaling factor
     alphaR = 1  # Rotation scaling factor (in radians for Open3D)
     alphaS = 100  # Scaling scaling factor
+    alphaE = 100 #extrusion scaling factor
+    
+    global extrusion_distance
+    global direction
 
     match subcommand[1]:
         case "start":
@@ -749,6 +762,28 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
         case "end":
             print("Ending motion")
             # Reset the history after operation ends
+            if(history["operation"] == "extrude"):                
+                vis.remove_geometry(objectHandle, reset_bounding_box=False)
+                # Convert numpy array to a Tensor for the direction
+                direction_tensor = o3d.core.Tensor(direction, dtype=o3d.core.Dtype.Float32)
+
+                # Perform the extrusion using the new length
+                # Assuming objectHandle is a legacy TriangleMesh object
+                mesh_extrusion = o3d.t.geometry.TriangleMesh.from_legacy(objectHandle)
+                extruded_shape = mesh_extrusion.extrude_linear(direction_tensor, scale= extrusion_distance)
+                filled = extruded_shape.fill_holes()
+
+
+                # Assuming you want to convert the tensor-based extruded shape back to legacy format for visualization
+                objectHandle = o3d.geometry.TriangleMesh(filled.to_legacy())
+                objectHandle.compute_vertex_normals()
+                
+                # Add the new geometry
+                objectHandle.paint_uniform_color([0.540, 0.68, 0.52])
+                vis.add_geometry(objectHandle, reset_bounding_box = False)
+                
+                objects_dict['object_2'] = {'object': objectHandle, 'center': objectHandle.get_center(), 'highlighted' : True, 'selected' : True, 'scale' : 100}
+                
             history["operation"] = ""
             history["axis"] = ""
             history["lastVal"] = ""
@@ -838,16 +873,18 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                             print(f"Error processing numerical values from command: {e}")
                             
                     case "extrude":
-                        try:
+                        try:# Remove the old geometry if it's different from the new one
+
+                            #vis.remove_geometry(objectHandle, reset_bounding_box=False)
+
+                            
                             direction = np.array([0, 0, 1])  # Assuming extrusion along the Z-axis
+                                                    # Assuming that 'subcommand[2]' is the length to extrude and 'history["lastVal"]' is the previous length
                             delta = float(subcommand[2]) - float(history["lastVal"])
-                            new_extrusion_length = delta - float(history["lastVal"])
-                            print("extruding by ", delta)
-            
-                            # Perform the extrusion using the new length
-                            extruded_shape = objectHandle.extrude_linear(direction, o3d.core.Tensor([new_extrusion_length], dtype=o3d.core.Dtype.Float32))
-                            vis.add_geometry(extruded_shape)
-                        
+                            extrusion_distance += delta/alphaE  # If you meant to add the difference to the current length, you'd add it here
+                            
+                            print("extruding by ", extrusion_distance)
+
                         except Exception as e:
                             print(f"Error processing numerical values from command: {e}")
             
@@ -960,23 +997,57 @@ def main():
     camera_parameters.intrinsic.set_intrinsics(
         width=width, height=height, fx=K[0][0], fy=K[1][1], cx=K[0][2], cy=K[1][2]
     )
+    o3d.t
     print("Testing mesh in Open3D...")
 
     mesh = o3d.geometry.TriangleMesh.create_box(width=0.2, height=0.2, depth=0.2)
     mesh.compute_vertex_normals()
-    box = o3d.t.geometry.TriangleMesh.from_legacy(mesh)
 
+
+
+
+    delta = float(0.1)
+    new_extrusion_length = delta  # If you meant to add the difference to the current length, you'd add it here
+    
+    print("extruding by ", delta)
+
+    direction = direction = np.array([0, 0, 1])
 
     mesh2 = o3d.geometry.TriangleMesh.create_box(width=0.2, height=0.4, depth=0.2)
+    
+           # Convert numpy array to a Tensor for the direction
+    direction_tensor = o3d.core.Tensor(direction, dtype=o3d.core.Dtype.Float32)
+
+    # Perform the extrusion using the new length
+    # Assuming objectHandle is a legacy TriangleMesh object
+    mesh_extrusion = o3d.t.geometry.TriangleMesh.from_legacy(mesh2)
+    extruded_shape = mesh_extrusion.extrude_linear(direction_tensor, scale=new_extrusion_length)
+
+    # Assuming you want to convert the tensor-based extruded shape back to legacy format for visualization
+    mesh2 = o3d.geometry.TriangleMesh(extruded_shape.to_legacy())
+
+    
+    # Perform the extrusion using the new length
+    # Assuming objectHandle is a legacy TriangleMesh object
+
+
+    # Assuming you want to convert the tensor-based extruded shape back to legacy format for visualization
+    mesh2 = o3d.geometry.TriangleMesh(extruded_shape.to_legacy())
+    
+    
+    
     mesh2.compute_vertex_normals()
     mesh2.translate(np.array([0.3, 0.5, 0.3]))
+    
+    
+    
 
     # create visualizer and window.
     vis = o3d.visualization.Visualizer()
     vis.create_window(
         window_name="Open3D", width=width, height=height, left=50, top=50, visible=True
     )
-    o3d.visualization.draw_geometries([box])
+    vis.add_geometry(mesh)
     vis.add_geometry(mesh2)
     vis.get_render_option().background_color = np.array([0.8, 0.9, 1.0])
 
