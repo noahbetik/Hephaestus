@@ -43,6 +43,7 @@ zoomFactor = 0.3
 
 
 
+
 class Open3DVisualizerWidget(QtWidgets.QWidget):
     def __init__(self, vis, parent=None):
         super(Open3DVisualizerWidget, self).__init__(parent)
@@ -408,8 +409,7 @@ def parseCommand(
     global prevRotated
     info = command.split(" ")
     print(info)
-    objectHandle = ""
-    
+    objectHandle = ""    
 
     # Check for selected objects in objects_dict and update objectHandle to point to the mesh if selected
     for object_id, obj_info in objects_dict.items():
@@ -419,8 +419,7 @@ def parseCommand(
             break  # Assume only one object can be selected at a time; break after finding the first selected object
      # Assume only one object can be selected at a time; break after finding the first selected object
 
-    if len(info) > 1:
-        main_window.update_text(info[1])  # Use the update_text method of the main window
+  
 
     match info[0]:
         case "motion":
@@ -430,7 +429,7 @@ def parseCommand(
             else:
                 # if (prevRotated) : snap_to_closest_plane(vis, view_control)
                 # prevRotated = False
-                handleUpdateGeo(info[1:], history, objectHandle, vis)
+                handleUpdateGeo(info[1:], history, objectHandle, vis, main_window, objects_dict)
                 return ""
         case "select":
             return handleSelection(objects_dict, vis, main_window)  # Assume this function handles object selection
@@ -443,7 +442,7 @@ def parseCommand(
             # if objectHandle:
             #     if (prevRotated) : snap_to_closest_plane(vis, view_control)
             #     prevRotated = False
-                handleUpdateGeo(info[1:], history, objectHandle, vis)
+                handleUpdateGeo(info[1:], history, objectHandle, vis, main_window, objects_dict)
         case "home":
             snap_isometric(vis, view_control)
         case "snap":
@@ -509,8 +508,58 @@ def removeGeometry(vis, object):
     vis.remove_geometry(object)
     return
 
+def scale_object(objectHandle, delta):
+    scaleFactor = 1 + delta
+    
+    # Compute the object's center for uniform scaling about its center
+    print("increasing object scale by factor of ", delta)
+    center = objectHandle.get_center()
+
+    objectHandle.scale(scaleFactor, center)
+    # Apply the transformation
 
 
+def rotate_object(objectHandle, axis, degrees=5):
+    # Calculate the rotation angle in radians
+    angle = np.radians(degrees)
+    
+    # Compute the object's center
+    center = objectHandle.get_center()
+    
+    # Define the rotation matrix for each axis
+    if axis == "x":
+        print("rotating object about x")
+        rotation_matrix = np.array([
+            [1, 0, 0, 0],
+            [0, np.cos(angle), -np.sin(angle), 0],
+            [0, np.sin(angle), np.cos(angle), 0],
+            [0, 0, 0, 1]
+        ])
+    elif axis == "y":
+        print("rotating object about y")
+
+        rotation_matrix = np.array([
+            [np.cos(angle), 0, np.sin(angle), 0],
+            [0, 1, 0, 0],
+            [-np.sin(angle), 0, np.cos(angle), 0],
+            [0, 0, 0, 1]
+        ])
+    else:
+        raise ValueError("Axis must be 'x' or 'y'")
+    
+    # Translate the object to the origin, rotate, and then translate back
+    translate_to_origin = np.eye(4)
+    translate_to_origin[:3, 3] = -center
+    translate_back = np.eye(4)
+    translate_back[:3, 3] = center
+    
+    # Combine the transformations
+    transformation = translate_back @ rotation_matrix @ translate_to_origin
+    
+    # Apply the transformation
+    objectHandle.transform(transformation)
+    
+    
 def handleCam(subcommand, view_control, history, vis):
     
     global prevRotated
@@ -686,10 +735,10 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, geometry_dir)
                 vis.update_geometry(pcd)
                 vis.update_geometry(ls)
 
-def handleUpdateGeo(subcommand, history, objectHandle, vis):
+def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects_dict):
     alphaM = 0.01  # Translation scaling factor
     alphaR = 1  # Rotation scaling factor (in radians for Open3D)
-    alphaS = 1  # Scaling scaling factor
+    alphaS = 100  # Scaling scaling factor
 
     match subcommand[1]:
         case "start":
@@ -705,53 +754,94 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis):
             history["lastVal"] = ""
             return
         case "position":
-            if objectHandle:
-                print("Updating position or transformation")
-                # Assuming subcommand[2] is something like "(395,166)"
-                try:
-                    # Extract numerical values from the command
-                    # This splits the string by comma after removing parentheses, then converts each part to float
-                    coords = subcommand[2].strip("()").split(",")
-                    currentX = float(coords[0])
-                    currentY = float(coords[1])
-                    
-                    oldCoords = history["lastVal"].strip("()").split(",")
-                    
-                    oldX = float(oldCoords[0])
-                    oldY = float(oldCoords[1])
-                    
+                match history["operation"]:
+                    case "pan": #not actually pan, but object translation
+                        print("Updating position or transformation")
+                        main_window.update_text("translating object")
 
-                    
-                    deltaX = (currentX - oldX) * alphaM
-                    deltaY = (currentY - oldY) * alphaM
-                   # Retrieve the camera's rotation matrix
-                    view_control = vis.get_view_control()
-                    cam_params = view_control.convert_to_pinhole_camera_parameters()
-                    # For Open3D, the view matrix is cam_params.extrinsic, which includes rotation and translation
-                    # We only need the rotation part here
-                    rotation_matrix = np.linalg.inv(cam_params.extrinsic[:3, :3])
+                        # Assuming subcommand[2] is something like "(395,166)"
+                        try:
+                            # Extract numerical values from the command
+                            # This splits the string by comma after removing parentheses, then converts each part to float
+                            coords = subcommand[2].strip("()").split(",")
+                            currentX = float(coords[0])
+                            currentY = float(coords[1])
+                            
+                            oldCoords = history["lastVal"].strip("()").split(",")
+                            
+                            oldX = float(oldCoords[0])
+                            oldY = float(oldCoords[1])
+                            
 
-                    # Transform the translation vector from view space to world space
-                    # Note: deltaY is negated to account for screen-to-world coordinate system change
-                    view_space_translation = np.array([deltaX, deltaY, 0])
-                    world_space_translation = rotation_matrix.dot(view_space_translation)
-                    
-                    # Apply the world-space translation to the object
-                    objectHandle.translate(world_space_translation, relative=True)
-                    print("Translating object by", world_space_translation)
-                    
-                    # Update history with the current values for continuous operations
-                    history["lastX"] = currentX
-                    history["lastY"] = currentY
-                    vis.update_geometry(objectHandle)
-                except Exception as e:
-                    print(f"Error processing numerical values from command: {e}")
-                    
-            history["lastVal"] = subcommand[2]
+                            
+                            deltaX = (currentX - oldX) * alphaM
+                            deltaY = (currentY - oldY) * alphaM
+                            # Retrieve the camera's rotation matrix
+                            view_control = vis.get_view_control()
+                            cam_params = view_control.convert_to_pinhole_camera_parameters()
+                            rotation_matrix = np.linalg.inv(cam_params.extrinsic[:3, :3])
+
+                            # Transform the translation vector from view space to world space
+                            # Note: deltaY is negated to account for screen-to-world coordinate system change
+                            view_space_translation = np.array([deltaX, deltaY, 0])
+                            world_space_translation = rotation_matrix.dot(view_space_translation)
+                            
+                            # Apply the world-space translation to the object
+                            objectHandle.translate(world_space_translation, relative=True)
+                            print("Translating object by", world_space_translation)
+                            
+                            # Update history with the current values for continuous operations
+                            history["lastX"] = currentX
+                            history["lastY"] = currentY
+                        except Exception as e:
+                            print(f"Error processing numerical values from command: {e}")
+                            
+                           
+                    case "rotate": #object rotation
+                        
+                        try:
+                            print("object rotation")
+                            delta = float(subcommand[2]) - float(history["lastVal"])
+                            rotate_object(objectHandle, history["axis"], degrees=delta * alphaR)
+                            print("current degrees ", delta * alphaR)
+                        except Exception as e:
+                            print(f"Error processing numerical values from command: {e}")
+
+
+
+
+                    case "zoom": #object scaling
+                        try:
+                            print("object scaling")
+                            delta = float(subcommand[2]) - float(history["lastVal"])
+
+                            selected_object_id = None
+                            for object_id, obj_info in objects_dict.items():
+                                if obj_info.get('selected', False):  # Find the selected object
+                                    selected_object_id = object_id
+                                    # Update the scale of the selected object
+                                    obj_info['scale'] += 100 * (delta / alphaS)
+                                    break  # Assuming only one object can be selected at a time
+
+                            if selected_object_id is not None:
+                                # Retrieve the updated scale of the selected object
+                                objectScale = objects_dict[selected_object_id]['scale']
+                                # Format the scale for display
+                                formatted_text = f"Scaling factor: {objectScale:.0f}%"
+                                main_window.update_text(formatted_text)
+                            else:
+                                print("No object is currently selected.")
+
+                            scale_object(objectHandle, delta/alphaS)
+
+                        except Exception as e:
+                            print(f"Error processing numerical values from command: {e}")
+                
+                vis.update_geometry(objectHandle)
+                history["lastVal"] = subcommand[2]
 
         case _:
             print("Invalid command")
-
 
 
 def handleSelection(objects_dict, vis, main_window):
@@ -762,7 +852,7 @@ def handleSelection(objects_dict, vis, main_window):
             obj.paint_uniform_color([0.540, 0.68, 0.52])  # Paint the object darker green
             vis.update_geometry(obj)
             print(f"Object {object_id} selected")
-            main_window.update_text(f"Object {object_id} selected")
+            main_window.update_text(f"Object selected!")
 
             break  # Exit the loop once an object is marked as selected
 
@@ -879,8 +969,8 @@ def main():
     # vis.add_geometry(marker)
 
 
-    objects_dict['object_1'] = {'object': mesh, 'center': mesh.get_center(), 'highlighted' : False, 'selected' : False}
-    objects_dict['object_2'] = {'object': mesh2, 'center': mesh2.get_center(), 'highlighted' : False, 'selected' : False}
+    objects_dict['object_1'] = {'object': mesh, 'center': mesh.get_center(), 'highlighted' : False, 'selected' : False,  'scale' : 100}
+    objects_dict['object_2'] = {'object': mesh2, 'center': mesh2.get_center(), 'highlighted' : False, 'selected' : False, 'scale' : 100}
 
 
 
