@@ -832,10 +832,27 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                             else:
                                 print("No object is currently selected.")
 
-                            scale_object(objectHandle, delta/alphaS)
+                            scale_object(objectHandle, delta/alphaS)                        
 
                         except Exception as e:
                             print(f"Error processing numerical values from command: {e}")
+                            
+                    case "extrude":
+                        try:
+                            direction = np.array([0, 0, 1])  # Assuming extrusion along the Z-axis
+                            delta = float(subcommand[2]) - float(history["lastVal"])
+                            new_extrusion_length = delta - float(history["lastVal"])
+                            print("extruding by ", delta)
+            
+                            # Perform the extrusion using the new length
+                            extruded_shape = objectHandle.extrude_linear(direction, o3d.core.Tensor([new_extrusion_length], dtype=o3d.core.Dtype.Float32))
+                            vis.add_geometry(extruded_shape)
+                        
+                        except Exception as e:
+                            print(f"Error processing numerical values from command: {e}")
+            
+
+
                 
                 vis.update_geometry(objectHandle)
                 history["lastVal"] = subcommand[2]
@@ -943,11 +960,11 @@ def main():
     camera_parameters.intrinsic.set_intrinsics(
         width=width, height=height, fx=K[0][0], fy=K[1][1], cx=K[0][2], cy=K[1][2]
     )
-
     print("Testing mesh in Open3D...")
 
     mesh = o3d.geometry.TriangleMesh.create_box(width=0.2, height=0.2, depth=0.2)
     mesh.compute_vertex_normals()
+    box = o3d.t.geometry.TriangleMesh.from_legacy(mesh)
 
 
     mesh2 = o3d.geometry.TriangleMesh.create_box(width=0.2, height=0.4, depth=0.2)
@@ -959,7 +976,7 @@ def main():
     vis.create_window(
         window_name="Open3D", width=width, height=height, left=50, top=50, visible=True
     )
-    vis.add_geometry(mesh)
+    o3d.visualization.draw_geometries([box])
     vis.add_geometry(mesh2)
     vis.get_render_option().background_color = np.array([0.8, 0.9, 1.0])
 

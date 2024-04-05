@@ -118,8 +118,8 @@ def load_gesture_definitions(filename):
 def main():
     left_hand_gesture_id = None
     right_hand_gesture_id = None
-    confidence_threshold = 0.30
-    frame_threshold = 20
+    confidence_threshold = 0.50
+    frame_threshold = 15
     frame_counter = 0
     # 0 = nothing
     # 1 = lock-in
