@@ -35,6 +35,7 @@ prevRotated = False
 prevSnapped = False
 marker = o3d.geometry.TriangleMesh.create_sphere(radius=0.02)
 previous_look_at_point = None
+zoomFactor = 0.3
 
 
 
@@ -234,6 +235,7 @@ def move_camera(view_control, direction, amount=1.5):
 
 
 def move_camera_v2(view_control, direction, amount=1.5):
+    global zoomFactor
     cam_params = view_control.convert_to_pinhole_camera_parameters()
     extrinsic = np.array(cam_params.extrinsic)
 
@@ -246,7 +248,7 @@ def move_camera_v2(view_control, direction, amount=1.5):
 
     cam_params.extrinsic = extrinsic
     view_control.convert_from_pinhole_camera_parameters(cam_params, True)
-
+    zoomFactor += amount/2
 
 def move_camera_v3(view_control, vals):
     cam_params = view_control.convert_to_pinhole_camera_parameters()
@@ -261,6 +263,15 @@ def move_camera_v3(view_control, vals):
 
 
 def rotate_camera(view_control, axis, degrees=5):
+    global zoomFactor
+    
+    
+    
+    if degrees > 0:  # Assuming positive degrees tilt the view upwards
+        zoomFactor *= (1 - 0.05)  # Slightly decrease for "zooming out"
+    #else:
+        #zoomFactor *= (1 + 0.05)  # Slightly increase for "zooming in"
+
     cam_params = view_control.convert_to_pinhole_camera_parameters()
     R = cam_params.extrinsic[:3, :3]
     t = cam_params.extrinsic[:3, 3].copy()
@@ -441,69 +452,6 @@ def parseCommand(
 
 
 
-def get_camera_look_at_position(view_control):
-    cam_params = view_control.convert_to_pinhole_camera_parameters()
-    
-    # The inverse of the view matrix gives the camera's orientation and position in world space
-    inverse_view_matrix = np.linalg.inv(cam_params.extrinsic)
-    
-    # The camera's position is the fourth column of the inverse view matrix
-    camera_position = inverse_view_matrix[:3, 3]
-    
-    # The forward direction vector should be the negative of the third column of the rotation matrix
-    forward_direction = -inverse_view_matrix[:3, 2]
-    
-    # Normalize the forward direction
-    forward_direction_normalized = forward_direction / np.linalg.norm(forward_direction)
-    
-    # Define a distance in front of the camera to place the "look-at" point
-    distance = 0.1  # Adjust as needed for your application
-    
-    # Calculate the look-at point by moving along the camera's forward direction from its position
-    look_at_point = camera_position + distance * forward_direction_normalized
-    
-    look_at_point[2] = 0.5
-    print(f"Look-at point: {look_at_point}")
-    print(f"Camera position: {camera_position}")
-    print(f"Forward direction: {forward_direction_normalized}")
-    
-    return look_at_point
-
-
-
-
-def get_camera_look_at_position_v2(view_control):
-    cam_params = view_control.convert_to_pinhole_camera_parameters()
-    inverse_view_matrix = np.linalg.inv(cam_params.extrinsic)
-    forward_direction = -inverse_view_matrix[:3, 2]
-    camera_position = inverse_view_matrix[:3, 3]
-    distance = 0.1
-    look_at_point = camera_position + (forward_direction * distance)
-    return look_at_point
-
-def update_marker_position(marker, current_look_at_point):
-    global previous_look_at_point
-
-    # Ensure the previous look_at_point is not None
-    if previous_look_at_point is not None:
-        # Calculate the translation delta
-        translation_delta = current_look_at_point - previous_look_at_point
-
-        # Get the vertices of the marker's mesh
-        vertices = np.asarray(marker.vertices)
-
-        # Apply the translation delta to each vertex
-        new_vertices = vertices + translation_delta
-        marker.vertices = o3d.utility.Vector3dVector(new_vertices)
-
-        # Recompute normals in case lighting effects are being used
-        marker.compute_vertex_normals()
-    else:
-        # If there's no previous point (i.e., the first frame), don't move the marker
-        pass
-
-    # Update the global or class attribute to the current look_at_point for the next iteration
-    previous_look_at_point = current_look_at_point
 
 def highlight_object(geometry, color=[1, 0, 0]):  # Default highlight color is red
     geometry.paint_uniform_color(color)
@@ -512,11 +460,13 @@ def compute_distance(point1, point2):
     return np.linalg.norm(point1 - point2)
 
 def highlight_objects_near_camera(vis, view_control, objects_dict):
+    global zoomFactor
     global marker
+    print("-=------------------zoom factor is ", zoomFactor)
     # Get the camera position from the view control
     cam_params = view_control.convert_to_pinhole_camera_parameters()
     camera_position = np.asarray(cam_params.extrinsic[:3, 3])
-    camera_position = camera_position + np.array([0, -0.1, 0])
+    camera_position = camera_position + np.array([0, -zoomFactor, 0])
     
     # update_marker_position(marker,camera_position)
     # vis.update_geometry(marker)
@@ -626,6 +576,10 @@ def handleCam(subcommand, view_control, history, vis):
 
 def handleNewGeo(subcommand, view_control, camera_parameters, vis, geometry_dir):
     alphaL = 0.001 # line scaling factor (maybe better way to do this)
+    print("***********subcommand[0] ", subcommand[0])
+    print("***********subcommand[1] ", subcommand[1])
+    
+
 
     match subcommand[0]:
         case "box":
@@ -652,9 +606,10 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, geometry_dir)
             camera_parameters.extrinsic = current_view_matrix
             view_control.convert_from_pinhole_camera_parameters(camera_parameters, True)
         case "line":  # line handling not fully implemented yet
-          #  print("**********SUBCOMMAND IS ",subcommand[1])
+            print("**********SUBCOMMAND IS ",subcommand[1])
           #currently broken right now because ML side is not sending the start command
             if subcommand[1] == "start":
+                
                 pcd = o3d.geometry.PointCloud()
                 ls = o3d.geometry.LineSet()
 
@@ -695,7 +650,8 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, geometry_dir)
                     camera_parameters, True
                 )
 
-            elif subcommand[1] == "end":
+            elif subcommand[2] == "end":
+        
                 ls_id = "ls" + str(geometry_dir["counters"]["ls"] - 1)
                 pcd_id = "pcd" + str(geometry_dir["counters"]["pcd"] - 1)
                 ls = geometry_dir[ls_id]
@@ -710,6 +666,7 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, geometry_dir)
 
                 vis.update_geometry(pcd)
                 vis.update_geometry(ls)
+                
 
             else:
                 print("still sketching")
