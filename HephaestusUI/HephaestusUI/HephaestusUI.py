@@ -762,32 +762,33 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
         case "end":
             print("Ending motion")
             # Reset the history after operation ends
-            if(history["operation"] == "extrude"):                
-                vis.remove_geometry(objectHandle, reset_bounding_box=False)
-                # Convert numpy array to a Tensor for the direction
-                direction_tensor = o3d.core.Tensor(direction, dtype=o3d.core.Dtype.Float32)
+            #if(history["operation"] == "extrude"):      
+                #vis.remove_geometry(objectHandle, reset_bounding_box=False)
+          
+                # vis.remove_geometry(objectHandle, reset_bounding_box=False)
+                # # Convert numpy array to a Tensor for the direction
+                # direction_tensor = o3d.core.Tensor(direction, dtype=o3d.core.Dtype.Float32)
 
-                # Perform the extrusion using the new length
-                # Assuming objectHandle is a legacy TriangleMesh object
-                mesh_extrusion = o3d.t.geometry.TriangleMesh.from_legacy(objectHandle)
-                extruded_shape = mesh_extrusion.extrude_linear(direction_tensor, scale= extrusion_distance)
-                filled = extruded_shape.fill_holes()
+                # # Perform the extrusion using the new length
+                # # Assuming objectHandle is a legacy TriangleMesh object
+                # mesh_extrusion = o3d.t.geometry.TriangleMesh.from_legacy(objectHandle)
+                # extruded_shape = mesh_extrusion.extrude_linear(direction_tensor, scale= extrusion_distance)
+                # filled = extruded_shape.fill_holes()
 
 
-                # Assuming you want to convert the tensor-based extruded shape back to legacy format for visualization
-                objectHandle = o3d.geometry.TriangleMesh(filled.to_legacy())
-                objectHandle.compute_vertex_normals()
+                # # Assuming you want to convert the tensor-based extruded shape back to legacy format for visualization
+                # objectHandle = o3d.geometry.TriangleMesh(filled.to_legacy())
+                # objectHandle.compute_vertex_normals()
                 
-                # Add the new geometry
-                objectHandle.paint_uniform_color([0.540, 0.68, 0.52])
-                vis.add_geometry(objectHandle, reset_bounding_box = False)
+                # # Add the new geometry
+                # objectHandle.paint_uniform_color([0.540, 0.68, 0.52])
+                # vis.add_geometry(objectHandle, reset_bounding_box = False)
                 
-                objects_dict['object_2'] = {'object': objectHandle, 'center': objectHandle.get_center(), 'highlighted' : True, 'selected' : True, 'scale' : 100}
-                
+                # objects_dict['object_2'] = {'object': objectHandle, 'center': objectHandle.get_center(), 'highlighted' : True, 'selected' : True, 'scale' : 100}
+            
             history["operation"] = ""
             history["axis"] = ""
             history["lastVal"] = ""
-            return
         case "position":
                 match history["operation"]:
                     case "pan": #not actually pan, but object translation
@@ -873,21 +874,45 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                             print(f"Error processing numerical values from command: {e}")
                             
                     case "extrude":
-                        try:# Remove the old geometry if it's different from the new one
-
-                            #vis.remove_geometry(objectHandle, reset_bounding_box=False)
-
-                            
-                            direction = np.array([0, 0, 1])  # Assuming extrusion along the Z-axis
-                                                    # Assuming that 'subcommand[2]' is the length to extrude and 'history["lastVal"]' is the previous length
+                        #snap_to_closest_plane(vis, vis.get_view_control())
+                        try:
+                            # Calculate the new extrusion distance as before
                             delta = float(subcommand[2]) - float(history["lastVal"])
-                            extrusion_distance += delta/alphaE  # If you meant to add the difference to the current length, you'd add it here
+                            extrusion_distance = delta / alphaE
                             
-                            print("extruding by ", extrusion_distance)
+                            # Update the cumulative change tracker
+                            history['last_extrusion_distance'] += delta / alphaE  
+
+                            # Check if the cumulative change exceeds the threshold of 0.1
+                            if abs(history['last_extrusion_distance']) >= 0.1:
+                                
+                                vis.remove_geometry(objectHandle, reset_bounding_box=False)
+                                direction = np.array([0, 0, 1])  # Z-axis extrusion direction
+                                direction_tensor = o3d.core.Tensor(direction, dtype=o3d.core.Dtype.Float32)
+
+                                # Perform the extrusion using the accumulated distance
+                                mesh_extrusion = o3d.t.geometry.TriangleMesh.from_legacy(objectHandle)
+                                extruded_shape = mesh_extrusion.extrude_linear(direction_tensor, scale=history['last_extrusion_distance'])
+                                filled = extruded_shape.fill_holes()
+
+                                # Convert back to legacy format and update visualization
+                                objectHandle = o3d.geometry.TriangleMesh(filled.to_legacy())
+                                objectHandle.compute_vertex_normals()
+                                objectHandle.paint_uniform_color([0.540, 0.68, 0.52])
+                                vis.add_geometry(objectHandle, reset_bounding_box=False)
+
+                                # Reset the cumulative change tracker after extrusion
+                                history['last_extrusion_distance'] = 0.0
+
+                                print("Extruding by", history['last_extrusion_distance'])
+                                objects_dict['object_2'] = {'object': objectHandle, 'center': objectHandle.get_center(), 'highlighted' : True, 'selected' : True, 'scale' : 100}
+
+                            else:
+                                print("Accumulating changes, current cumulative change:", history['last_extrusion_distance'])
 
                         except Exception as e:
                             print(f"Error processing numerical values from command: {e}")
-            
+                    
 
 
                 
@@ -1066,7 +1091,7 @@ def main():
 
     # Initialize required dictionaries and parameters
     geometry_dir = {"counters": {"pcd": 0, "ls": 0, "mesh": 0}}
-    history = {"operation": "", "axis": "", "lastVal": ""}
+    history = {"operation": "", "axis": "", "lastVal": "", 'last_extrusion_distance': 0.0}
 
     main_window = MainWindow(vis)
     main_window.show()
