@@ -74,3 +74,4 @@ crashlytics-build.properties
 # Temporary auto-generated Android Assets
 /Hephaestus/[Aa]ssets/[Ss]treamingAssets/aa.meta
 /Hephaestus/[Aa]ssets/[Ss]treamingAssets/aa/*
+*.pyc
