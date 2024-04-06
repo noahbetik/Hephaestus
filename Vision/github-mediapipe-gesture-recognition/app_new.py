@@ -363,17 +363,21 @@ def main():
                 )
             ## NOTHING STAGE ###################################
             else:
-                if state_machine != 0 and not (gesture_types[gesture_list[right_hand_gesture_id]]["action"]  == "one-hit"):
-                    state_machine = 0
-                    gesture_end_command = f"{gesture_type} {gesture_subtype} end"
-                    tcp_communication.send_command(gesture_end_command)
+                if right_hand_gesture_id:
+                    if state_machine != 0 and not (
+                        gesture_types[gesture_list[right_hand_gesture_id]]["action"]
+                        == "one-hit"
+                    ):
+                        state_machine = 0
+                        gesture_end_command = f"{gesture_type} {gesture_subtype} end"
+                        tcp_communication.send_command(gesture_end_command)
                 # print(gesture_end_command)
                 left_hand_gesture_id = None
                 right_hand_gesture_id = None
                 prev_num_of_hands = None
                 prev_left_hand_gesture_id = None
                 prev_right_hand_gesture_id = None
-               
+
                 sys.stdout.write(f"\rThere is no hand in view")
                 sys.stdout.flush()
 
