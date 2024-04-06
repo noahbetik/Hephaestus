@@ -326,11 +326,7 @@ def main():
                         left_hand_gesture_id != prev_left_hand_gesture_id
                         or right_hand_gesture_id != prev_right_hand_gesture_id
                     )
-                    if (
-                        gesture_changed
-                        and left_hand_gesture_id == 5
-                        or right_hand_gesture_id == 5
-                    ):
+                    if left_hand_gesture_id == 5 or right_hand_gesture_id == 5:
                         state_machine = 3
                         print("Terminating gesture due to thumbs-down")
                         continue
