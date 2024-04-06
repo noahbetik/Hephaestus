@@ -53,7 +53,8 @@ class Camera:
 
     # Initialize camera object
     def initialize_camera(self):
-        self.cap = cv.VideoCapture(self.cap_device)
+        #remove cv.CAP_DSHOW if camera is not opening
+        self.cap = cv.VideoCapture(self.cap_device,cv.CAP_DSHOW)
         self.cap.set(cv.CAP_PROP_FRAME_WIDTH, self.cap_width)
         self.cap.set(cv.CAP_PROP_FRAME_HEIGHT, self.cap_height)
 
