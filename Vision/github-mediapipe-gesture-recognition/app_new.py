@@ -60,7 +60,9 @@ def start_command(
         case ("motion", "rotate"):  # fist
             return f"motion rotate start {axis} {point_history[-1][0]}"
         case ("motion", "extrude"):  # pinch and drag
-            return f"motion extrude start {point_history[-1][0]}"
+            return (
+                f"motion extrude start ({point_history[-1][0]},{point_history[-1][1]})"
+            )
         case ("create", "line"):  # pointer
             return f"create line start ({point_history[-2][0]},{point_history[-2][1]}) ({point_history[-1][0]},{point_history[-1][1]})"  # from noah: i do it this way to make parsing easier on UI side
         case ("toggle", "mode"):
@@ -88,7 +90,7 @@ def active_command(gesture_type, gesture_subtype, point_history):
         case ("motion", "rotate"):
             return f"motion rotate position {point_history[-1][0]}"
         case ("motion", "extrude"):
-            return f"motion extrude position {point_history[-1][0]}"
+            return f"motion extrude position ({point_history[-1][0]},{point_history[-1][1]})"
         case ("create", "line"):
             return f"create line ({point_history[-1][0]},{point_history[-1][1]})"
         case ("toggle", "mode"):
