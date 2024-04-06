@@ -307,8 +307,7 @@ def rotate_camera(view_control, axis, degrees=5):
     
     
     
-    if degrees > 0:  # Assuming positive degrees tilt the view upwards
-        zoomFactor *= (1 - 0.06)  # Slightly decrease for "zooming out"
+  
     #else:
         #zoomFactor *= (1 + 0.05)  # Slightly increase for "zooming in"
 
@@ -318,6 +317,9 @@ def rotate_camera(view_control, axis, degrees=5):
     angle = np.radians(degrees)
 
     if axis == "y":
+        
+        if degrees > 0:  # Assuming positive degrees tilt the view upwards
+              zoomFactor *= (1)  # Slightly decrease for "zooming out"
         rotation_matrix = np.array(
             [       
                 [np.cos(angle), 0, np.sin(angle)],
@@ -333,6 +335,15 @@ def rotate_camera(view_control, axis, degrees=5):
                 [0, np.sin(angle), np.cos(angle)],
             ]
         )
+    elif axis == "z":
+        rotation_matrix = np.array(
+            [
+                [np.cos(angle), -np.sin(angle), 0],
+                [np.sin(angle), np.cos(angle), 0],
+                [0, 0, 1],
+            ]
+        )
+
 
     R = rotation_matrix @ R
     new_extrinsic = np.eye(4)
@@ -508,7 +519,7 @@ def highlight_objects_near_camera(vis, view_control, objects_dict):
     # Get the camera position from the view control
     cam_params = view_control.convert_to_pinhole_camera_parameters()
     camera_position = np.asarray(cam_params.extrinsic[:3, 3])
-    camera_position = camera_position + np.array([0, -zoomFactor, 0])
+    #camera_position = camera_position + np.array([0, -zoomFactor, -0.25])
     
     # update_marker_position(marker,camera_position)
     # vis.update_geometry(marker)
@@ -663,6 +674,7 @@ def handleCam(subcommand, view_control, history, vis):
                     highlight_objects_near_camera(vis, view_control, objects_dict)
                     
                 case "rotate":
+                    print("current axis, ", history["axis"])
                     prevRotated = True
                     print("camera rotate update")
                     delta = float(subcommand[2]) - float(history["lastVal"])
