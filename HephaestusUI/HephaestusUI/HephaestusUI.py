@@ -12,6 +12,7 @@ from PySide6.QtGui import QFont
 
 from camera_configs import predefined_extrinsics
 from camera_configs import forward_vectors
+from camera_configs import faces
 
 
 
@@ -38,7 +39,6 @@ marker = o3d.geometry.TriangleMesh.create_sphere(radius=0.02)
 previous_look_at_point = None
 zoomFactor = 0.25
 extrusion_distance = 0
-direction = [0,0,1]
 
 
 class Open3DVisualizerWidget(QtWidgets.QWidget):
@@ -138,10 +138,8 @@ def create_grid(size=10, n=10, plane='xz', color=[0.5, 0.5, 0.5]):
     return grid
 
 
-def closest_config(current_extrinsic, forward_vector = False):
+def closest_config(current_extrinsic, extrinsics=predefined_extrinsics):
     
-    extrinsics = predefined_extrinsics
-    if forward_vector: extrinsics = forward_vectors
     current_rotation = current_extrinsic[:3, :3]
      #find closest match
     closest_match = None
@@ -446,6 +444,13 @@ def getTCPData(sock):
         # Temporarily set a non-blocking mode to check for new data
         sock.setblocking(False)
         data = sock.recv(1024)  # Attempt to read more data
+        
+        if data:
+        # Process received data
+            print(f"Received: {data.decode('ascii').strip()}")
+
+            # Send acknowledgment back
+            sock.sendall("ACK".encode("ascii"))
         #sock.setblocking(True)  # Revert to the original blocking mode
 
         # Decode and append to buffer
@@ -545,6 +550,33 @@ def parseCommand(
             if (snapCount>2):
                 snap_isometric(vis, view_control)
             else: snap_to_closest_plane(vis, view_control)
+        case "delete":
+        
+        #for extrusion, reset to original object
+            print("last operation was ", history["operation"])
+            print("reverting to original state")
+            if 'original' in objects_dict[object_id]:
+                history['total_extrusion_x'] = 0
+                history['total_extrusion_y'] = 0
+
+                vis.remove_geometry(objectHandle, reset_bounding_box=False)
+                objectHandle = clone_mesh(objects_dict[object_id]['original'])
+                objectHandle.compute_vertex_normals()
+                objectHandle.paint_uniform_color([0.540, 0.68, 0.52])  #back to green 
+                vis.add_geometry(objectHandle, reset_bounding_box=False)
+                vis.update_geometry(objectHandle)
+
+
+                objects_dict[object_id]['object'] = objectHandle  # Update the current object with the original
+                history['last_extrusion_distance_x'] = 0.0
+                history['last_extrusion_distance_y'] = 0.0
+
+                objects_dict[object_id]['total_extrusion_x'] = 0.0
+                objects_dict[object_id]['total_extrusion_y'] = 0.0
+            
+            
+
+
 
 
 
@@ -924,15 +956,19 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
     alphaS = 100  # Scaling scaling factor
     alphaE = 100 #extrusion scaling factor
     
+    
     global extrusion_distance
     global direction
 
     match subcommand[1]:
         case "start":
-            #print("Starting motion")
+            
             history["operation"] = subcommand[0]  # Operation type
             history["axis"] = subcommand[2] if len(subcommand) > 2 else None  # Axis, if applicable
             history["lastVal"] = subcommand[3] if len(subcommand) > 3 else None  # Starting value, if applicable
+            
+            if (subcommand[0] == "extrude"):
+                snap_to_closest_plane(vis, vis.get_view_control())
         case "end":
             #print("Ending motion")
             # Reset the history after operation ends
@@ -940,13 +976,12 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
             if(history["operation"] == "extrude"):   
                 objectHandle.paint_uniform_color([0.540, 0.68, 0.52])  #back to green 
                 vis.update_geometry(objectHandle)            
-                history['total_extrusion'] = 0
+                history['total_extrusion_x'] = 0
+                history['total_extrusion_y'] = 0
+
                 if 'original' in objects_dict:  
                   del objects_dict['original']
-                
-            history["operation"] = ""
-            history["axis"] = ""
-            history["lastVal"] = ""
+
         case "position":
                 match history["operation"]:
                     case "pan": #not actually pan, but object translation
@@ -974,6 +1009,8 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                             
                             objectHandle.translate(world_space_translation, relative=True)
                             objects_dict[object_id]['center'] = objectHandle.get_center()
+                            objects_dict[object_id]['original'].translate(world_space_translation, relative=True)
+
                             #print("Translating object by", world_space_translation)
                             
                             history["lastX"] = currentX
@@ -988,6 +1025,9 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                             #print("object rotation")
                             delta = float(subcommand[2]) - float(history["lastVal"])
                             rotate_object(objectHandle, history["axis"], degrees=delta * alphaR)
+                            rotate_object( objects_dict[object_id]['original'], history["axis"], degrees=delta * alphaR)
+                           
+
                             #print("current degrees ", delta * alphaR)
                         except Exception as e:
                             #print(f"Error processing numerical values from command: {e}")
@@ -1015,7 +1055,8 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                                 #print("No object is currently selected.")
                                 pass
 
-                            scale_object(objectHandle, delta/alphaS)                        
+                            scale_object(objectHandle, delta/alphaS)       
+                            scale_object(objects_dict[object_id]['original'], delta/alphaS)                
 
                         except Exception as e:
                             #print(f"Error processing numerical values from command: {e}")
@@ -1023,60 +1064,94 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                                 
                     case "extrude":
                         try:
-                            objectHandle.paint_uniform_color([0.53, 0.81, 0.92])  # Set to light blue
-                            delta = float(subcommand[2]) - float(history.get("lastVal", 0))
-                            extrusion_distance = delta / alphaE
-                            history['last_extrusion_distance'] += delta / alphaE
+                            
+                            coords = subcommand[2].strip("()").split(",")
+                            currentX = float(coords[0])
+                            currentY = float(coords[1])
+                            
+                            oldCoords = history["lastVal"].strip("()").split(",")
+                            
+                            oldX = float(oldCoords[0])
+                            oldY = float(oldCoords[1])
+                            
+                            deltaX = (currentX - oldX) / alphaE
+                            deltaY = (currentY - oldY) / alphaE
 
-                            if 'total_extrusion' not in objects_dict[object_id]:
-                                objects_dict[object_id]['total_extrusion'] = 0.0
+                            objectHandle.paint_uniform_color([0.53, 0.81, 0.92])  # Set to light blue
+                            
+                            print("delta x is ",deltaX," delta y is ", deltaY)
+                            
+                            
+                            extrusion_distance_x = deltaX
+                            extrusion_distance_y = deltaY
+                            history['last_extrusion_distance_x'] += deltaX
+                            history['last_extrusion_distance_y'] -= deltaY
+
+
+                            if 'total_extrusion_x' not in objects_dict[object_id]:
+                                objects_dict[object_id]['total_extrusion_x'] = 0.0
+                                
+                            if 'total_extrusion_y' not in objects_dict[object_id]:
+                                objects_dict[object_id]['total_extrusion_y'] = 0.0
 
                             # Calculate the new total extrusion considering this operation
-                            new_total_extrusion = objects_dict[object_id]['total_extrusion'] + abs(extrusion_distance)
+                            new_total_extrusion_x = objects_dict[object_id]['total_extrusion_x'] + abs(extrusion_distance_x)
+                            new_total_extrusion_y = objects_dict[object_id]['total_extrusion_y'] + abs(extrusion_distance_y)
+                            print("last extrusion x ",history['last_extrusion_distance_x'])
+                            print("last extrusion y ",history['last_extrusion_distance_y'])
 
+
+                                  
+                            # if history['last_extrusion_distance_x'] <= -0.4 or history['last_extrusion_distance_y'] <= -0.4: 
+                            #     # Revert to the original state
+                            #     print("reverting to original state")
+                            #     if 'original' in objects_dict[object_id]:
+                            #         history['total_extrusion_x'] = 0
+                            #         history['total_extrusion_y'] = 0
+
+                            #         vis.remove_geometry(objectHandle, reset_bounding_box=False)
+                            #         objectHandle = clone_mesh(objects_dict[object_id]['original'])
+                            #         objectHandle.compute_vertex_normals()
+                            #         vis.add_geometry(objectHandle, reset_bounding_box=False)
+
+                            #         objects_dict[object_id]['object'] = objectHandle  # Update the current object with the original
+                            #         history['last_extrusion_distance_x'] = 0.0
+                            #         history['last_extrusion_distance_y'] = 0.0
+
+                            #         objects_dict[object_id]['total_extrusion_x'] = 0.0
+                            #         objects_dict[object_id]['total_extrusion_y'] = 0.0
                             
-                            if new_total_extrusion > 0.6:
-                                print("Maximum extrusion limit reached. No further extrusion will be performed.")
+                            if new_total_extrusion_x > 0.75:
+                                print("Maximum extrusion limit in x direction reached. No further extrusion will be performed.")
                                 main_window.update_text("Maximum extrusion limit reached. No further extrusion will be performed.")
-                                    
-                            if history['last_extrusion_distance'] <= -0.75:
-                                # Revert to the original state
-                                if 'original' in objects_dict[object_id]:
-                                    history['total_extrusion'] = 0
-                                    vis.remove_geometry(objectHandle, reset_bounding_box=False)
-                                    objectHandle = clone_mesh(objects_dict[object_id]['original'])
-                                    objectHandle.compute_vertex_normals()
-                                    vis.add_geometry(objectHandle, reset_bounding_box=False)
+                                pass
 
-                                    objects_dict[object_id]['object'] = objectHandle  # Update the current object with the original
-                                    history['last_extrusion_distance'] = 0.0
-                                    
-                            elif history['last_extrusion_distance'] >= 0.25:
-                                vis.remove_geometry(objectHandle, reset_bounding_box=False)
-                                objects_dict[object_id]['total_extrusion'] += 0.2
+                            elif history['last_extrusion_distance_x'] >= 0.25:##
+                                direction = [0,0,1]
+                                objects_dict[object_id]['total_extrusion_x'] += 0.2
+                                extrude(object_id, objectHandle, objects_dict, vis, history, direction)
 
-                                # Check and save the original state if not saved yet
-                                if 'original' not in objects_dict[object_id]:
-                                    objects_dict[object_id]['original'] = clone_mesh(objectHandle)
+                            if new_total_extrusion_y > 0.75:
+                                print("Maximum extrusion limit in y direction reached. No further extrusion will be performed.")
+                                main_window.update_text("Maximum extrusion limit reached. No further extrusion will be performed.")
+                                pass
 
-                                direction = np.array([0, 0, 1])
-                                direction_tensor = o3d.core.Tensor(direction, dtype=o3d.core.Dtype.Float32)
 
-                                # Perform the extrusion
-                                mesh_extrusion = o3d.t.geometry.TriangleMesh.from_legacy(objectHandle)
-                                extruded_shape = mesh_extrusion.extrude_linear(direction_tensor, scale=0.2)
-                                filled = extruded_shape.fill_holes()
+                            elif history['last_extrusion_distance_y'] >= 0.25:##
+                                objects_dict[object_id]['total_extrusion_y'] += 0.2
+                                direction = [0,1,0]
+                                extrude(object_id, objectHandle, objects_dict, vis, history, direction)
 
-                                objectHandle = o3d.geometry.TriangleMesh(filled.to_legacy())
-                                objectHandle.compute_vertex_normals()
-                                objectHandle.paint_uniform_color([0.53, 0.81, 0.92])  # Set to light blue
-                                vis.add_geometry(objectHandle, reset_bounding_box=False)
+                                #delta = deltaY
+                            print("extrusion direction set to ", direction)
+                                        
+                                
 
-                                objects_dict[object_id]['object'] = objectHandle  # Update the current object
-                                history['last_extrusion_distance'] = 0.0
+
+
 
                         except Exception as e:
-                         print(f"Error processing numerical values from command: {e}")
+                            print(f"Error processing numerical values from command: {e}")
                          
                          
                 vis.update_geometry(objectHandle)
@@ -1085,6 +1160,32 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
         case _:
             #print("Invalid command")
             pass
+
+
+
+def extrude(object_id, objectHandle, objects_dict, vis, history, direction):
+   
+        vis.remove_geometry(objectHandle, reset_bounding_box=False)
+
+        # Check and save the original state if not saved yet
+        if 'original' not in objects_dict[object_id]:
+            objects_dict[object_id]['original'] = clone_mesh(objectHandle)
+
+        direction_tensor = o3d.core.Tensor(direction, dtype=o3d.core.Dtype.Float32)
+
+        # Perform the extrusion
+        mesh_extrusion = o3d.t.geometry.TriangleMesh.from_legacy(objectHandle)
+        extruded_shape = mesh_extrusion.extrude_linear(direction_tensor, scale=0.2)
+        filled = extruded_shape#.fill_holes()
+
+        objectHandle = o3d.geometry.TriangleMesh(filled.to_legacy())
+        objectHandle.compute_vertex_normals()
+        objectHandle.paint_uniform_color([0.53, 0.81, 0.92])  # Set to light blue
+        vis.add_geometry(objectHandle, reset_bounding_box=False)
+
+        objects_dict[object_id]['object'] = objectHandle  # Update the current object
+        history['last_extrusion_distance_x'] = 0.0
+        history['last_extrusion_distance_y'] = 0.0
 
 
 
@@ -1262,7 +1363,7 @@ def main():
 
     # Initialize required dictionaries and parameters
     geometry_dir = {"counters": {"pcd": 0, "ls": 0, "mesh": 0}}
-    history = {"operation": "", "axis": "", "lastVal": "", 'last_extrusion_distance': 0.0, 'total_extrusion': 0.0}
+    history = {"operation": "", "axis": "", "lastVal": "", 'last_extrusion_distance_x': 0.0,'last_extrusion_distance_y': 0.0, 'total_extrusion': 0.0}
 
     main_window = MainWindow(vis)
     main_window.show()

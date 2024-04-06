@@ -124,7 +124,7 @@ def main():
     left_hand_gesture_id = None
     right_hand_gesture_id = None
     confidence_threshold = 0.50
-    frame_threshold = 15
+    frame_threshold = 8
     frame_counter = 0
     # 0 = nothing
     # 1 = lock-in
@@ -271,9 +271,8 @@ def main():
                             else single_gesture_name
                         )
                         if gesture_name == "Thumbs Up" or gesture_name == "Thumbs Down":
-                            frame_threshold = 10
-                        else:
-                            frame_threshold = 20
+                            frame_threshold = 5
+
                         sys.stdout.write(
                             f"\rGesture: {gesture_name}, Frames: {frame_counter}, Confidence: {confidence:.5f}"
                         )
