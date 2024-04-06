@@ -11,5 +11,6 @@
 	"Thumbs Up": { "type": "select", "subtype": "None", "action": "one-hit" },
 	"Illuminati_LeftHand": { "type": "snap", "subtype": "None", "action": "one-hit" },
 	"Illuminati_RightHand": { "type": "snap", "subtype": "None", "action": "one-hit" },
-	"Extrude": { "type": "motion", "subtype": "extrude", "action": "active" }
+	"Extrude": { "type": "motion", "subtype": "extrude", "action": "active" },
+	"The Gun": { "type": "delete", "subtype": "None", "action": "one-hit" }
 }

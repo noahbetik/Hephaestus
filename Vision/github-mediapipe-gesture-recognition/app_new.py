@@ -41,6 +41,7 @@ gesture_list = {
     10: "Illuminati_LeftHand",  # dual only, one-hit
     11: "Illuminati_RightHand",  # dual only, one-hit
     12: "Extrude",
+    13: "The Gun",
     (1, 6): "One finger and a fist",
     (2, 6): "Two fingers and a fist",
     (4, 6): "Three fingers and a fist",
@@ -73,6 +74,8 @@ def start_command(
             return f"select"
         case ("deselect", "None"):
             return f"deselect"
+        case ("delete", "None"):
+            return f"delete"
         case _:
             return "Command not found"
 
@@ -358,16 +361,17 @@ def main():
                 )
             ## NOTHING STAGE ###################################
             else:
+                if state_machine != 0 and not (gesture_types[gesture_list[right_hand_gesture_id]]["action"]  == "one-hit"):
+                    state_machine = 0
+                    gesture_end_command = f"{gesture_type} {gesture_subtype} end"
+                    tcp_communication.send_command(gesture_end_command)
+                # print(gesture_end_command)
                 left_hand_gesture_id = None
                 right_hand_gesture_id = None
                 prev_num_of_hands = None
                 prev_left_hand_gesture_id = None
                 prev_right_hand_gesture_id = None
-                if state_machine != 0:
-                    state_machine = 0
-                    gesture_end_command = f"{gesture_type} {gesture_subtype} end"
-                    tcp_communication.send_command(gesture_end_command)
-                    # print(gesture_end_command)
+               
                 sys.stdout.write(f"\rThere is no hand in view")
                 sys.stdout.flush()
 

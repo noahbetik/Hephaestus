@@ -1,7 +1,7 @@
 import socket
 
 
-def start_server(host="127.0.0.1", port=4447):
+def start_server(host="127.0.0.1", port=4449):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind((host, port))
         s.listen()

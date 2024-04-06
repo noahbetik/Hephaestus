@@ -129,9 +129,9 @@ def select_mode(key, mode):
         number = 10
     elif key == 119:  # using w for 11
         number = 11
-    elif key == 101:  # using e for 12  UNUSED CURRENTLY
+    elif key == 101:  # using e for 12 
         number = 12
-    elif key == 114:  # using r for 13  UNUSED CURRENTLY
+    elif key == 114:  # using r for 13 
         number = 13
     if key == 110:  # n
         mode = 0
