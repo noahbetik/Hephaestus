@@ -11,6 +11,7 @@ from PySide6.QtGui import QFont
 
 
 from camera_configs import predefined_extrinsics
+from camera_configs import forward_vectors
 
 
 
@@ -28,14 +29,14 @@ from camera_configs import predefined_extrinsics
 # HELPER FUNCTIONS
 # ----------------------------------------------------------------------------------------
 
-
+snapCount = 0
 objects_dict = {}
 curr_highlighted = False
 prevRotated = False
 prevSnapped = False
 marker = o3d.geometry.TriangleMesh.create_sphere(radius=0.02)
 previous_look_at_point = None
-zoomFactor = 0.3
+zoomFactor = 0.25
 extrusion_distance = 0
 direction = [0,0,1]
 
@@ -137,6 +138,24 @@ def create_grid(size=10, n=10, plane='xz', color=[0.5, 0.5, 0.5]):
     return grid
 
 
+def closest_config(current_extrinsic, forward_vector = False):
+    
+    extrinsics = predefined_extrinsics
+    if forward_vector: extrinsics = forward_vectors
+    current_rotation = current_extrinsic[:3, :3]
+     #find closest match
+    closest_match = None
+    smallest_difference = np.inf
+
+    for name, rotation in extrinsics.items():
+        difference = np.sum(np.abs(current_rotation - rotation))
+        if difference < smallest_difference:
+            closest_match = name
+            smallest_difference = difference
+    
+    print(closest_match)
+    return closest_match
+    
 
 def snap_to_closest_plane(vis, view_control):
     global prevSnapped
@@ -147,22 +166,10 @@ def snap_to_closest_plane(vis, view_control):
     cam_params = view_control.convert_to_pinhole_camera_parameters()
     current_extrinsic = cam_params.extrinsic
 
-    #extract rotational portion of extrinsic
-    current_rotation = current_extrinsic[:3, :3]
-    
-    #find closest match
-    closest_match = None
-    smallest_difference = np.inf
+   
     print("************current extrisnic: ", current_extrinsic)
 
-
-    for name, rotation in predefined_extrinsics.items():
-        difference = np.sum(np.abs(current_rotation - rotation))
-        if difference < smallest_difference:
-            closest_match = name
-            smallest_difference = difference
-            
-    print(f"************Closest match: {closest_match}")
+    closest_match = closest_config(current_extrinsic)
     
     updated_extrinsic = current_extrinsic.copy()
     updated_extrinsic[:3, :3] = predefined_extrinsics[closest_match]
@@ -457,6 +464,7 @@ def parseCommand(
     # [command] [subcommand]
 
     global prevRotated
+    global snapCount
     info = command.split(" ")
     print(info)
     objectHandle = ""    
@@ -477,6 +485,8 @@ def parseCommand(
 
     match info[0]:
         case "motion":
+            snapCount=0
+
             if objectHandle == "":
                 handleCam(info[1:], view_control, history, vis)
                 return ""
@@ -486,45 +496,57 @@ def parseCommand(
                 handleUpdateGeo(info[1:], history, objectHandle, vis, main_window, objects_dict, object_id)
                 return ""
         case "select":
+            snapCount = 0
+
             return handleSelection(objects_dict, vis, main_window)  # Assume this function handles object selection
         case "deselect":
+            snapCount = 0
+
             return handleDeselection(objects_dict, vis, main_window)  # Assume this function handles object selection
         case "create":
+            snapCount = 0
+
             handleNewGeo(info[1:], view_control, camera_parameters, vis, objects_dict)
             return ""
         case "update":
+            snapCount = 0
+
             # if objectHandle:
             #     if (prevRotated) : snap_to_closest_plane(vis, view_control)
             #     prevRotated = False
-                handleUpdateGeo(info[1:], history, objectHandle, vis, main_window, objects_dict, object_id)
+            handleUpdateGeo(info[1:], history, objectHandle, vis, main_window, objects_dict, object_id)
+            
         case "home":
             snap_isometric(vis, view_control)
         case "snap":
-            snap_to_closest_plane(vis, view_control)
+            snapCount+=1
+            if (snapCount>2):
+                snap_isometric(vis, view_control)
+            else: snap_to_closest_plane(vis, view_control)
 
 
-
-
-
-def highlight_object(geometry, color=[1, 0, 0]):  # Default highlight color is red
-    geometry.paint_uniform_color(color)
-
-def compute_distance(point1, point2):
-    return np.linalg.norm(point1 - point2)
 
 def highlight_objects_near_camera(vis, view_control, objects_dict):
-    global zoomFactor
-    global marker
-    print("-=------------------zoom factor is ", zoomFactor)
     # Get the camera position from the view control
     cam_params = view_control.convert_to_pinhole_camera_parameters()
-    camera_position = np.asarray(cam_params.extrinsic[:3, 3])
-    #camera_position = camera_position + np.array([0, -zoomFactor, -0.25])
-    
-    # update_marker_position(marker,camera_position)
-    # vis.update_geometry(marker)
+    closest_match = closest_config(cam_params.extrinsic)
+    extrinsic = predefined_extrinsics[closest_match]
 
-    # Initialize the closest distance and the object
+    
+    forward_vector = forward_vectors[closest_match]
+    print("forward vector is ",forward_vector)
+
+    
+    camera_position = np.array(cam_params.extrinsic[:3, 3]) 
+    print("*************original camera position is at", camera_position)
+    camera_position[0] *= forward_vector[0]
+    camera_position[1] *= forward_vector[1]
+    camera_position[2] *= forward_vector[2]
+
+
+
+
+    # Initialize the closest distance and the object ID
     closest_distance = np.inf
     closest_object_id = None
 
@@ -535,7 +557,11 @@ def highlight_objects_near_camera(vis, view_control, objects_dict):
         obj = info['object']
         centroid = info['center']
 
-        distance = compute_distance(camera_position, centroid)
+        distance = np.linalg.norm(camera_position[:2] - centroid[:2])       
+        
+        print("*************camera position is at", camera_position)
+
+        print("**************************object centred at ",centroid)
         
         if distance < closest_distance:
             closest_distance = distance
@@ -544,22 +570,22 @@ def highlight_objects_near_camera(vis, view_control, objects_dict):
     # Highlight the closest object and unhighlight others
     for object_id, info in objects_dict.items():
         if object_id == 'original':  # Skip the 'original' entry
-             continue
+            continue
         obj = info['object']
         if object_id == closest_object_id:
             # Highlight the closest object
-            highlight_object(obj, color=[0.640, 0.91, 0.62])  # Light green for highlighted object
+            obj.paint_uniform_color([0.640, 0.91, 0.62])  # Light green for highlighted object
             info['highlighted'] = True
         else:
             # Unhighlight all other objects by resetting their color
-            highlight_object(obj, color=[0.5, 0.5, 0.5])  # Default color
+            obj.paint_uniform_color([0.5, 0.5, 0.5])  # Default color
             info['highlighted'] = False
         
-        # Assuming vis.update_geometry(obj) will reflect the changes in the visualization
+        # Update the geometry to reflect changes
         vis.update_geometry(obj)
 
-
-
+    # You might need to call this if the visualizer doesn't automatically refresh
+    vis.update_renderer()
 
 
 def removeGeometry(vis, object):
@@ -686,6 +712,8 @@ def handleCam(subcommand, view_control, history, vis):
                     print("camera zoom update")
                     delta = float(subcommand[2]) - float(history["lastVal"])
                     move_camera_v2(view_control, "x", delta * alphaZ)
+                    highlight_objects_near_camera(vis, view_control, objects_dict)
+
             history["lastVal"] = subcommand[2]
         case _:
             print("INVALID COMMAND")
@@ -867,6 +895,7 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                             world_space_translation = rotation_matrix.dot(view_space_translation)
                             
                             objectHandle.translate(world_space_translation, relative=True)
+                            objects_dict[object_id]['center'] = objectHandle.get_center()
                             #print("Translating object by", world_space_translation)
                             
                             history["lastX"] = currentX
@@ -1094,52 +1123,26 @@ def main():
 
 
 
-    delta = float(0.3)
-    new_extrusion_length = delta  # If you meant to add the difference to the current length, you'd add it here
-    
-    print("extruding by ", delta)
-
-    direction = direction = np.array([0, 0, 1])
-
     mesh2 = o3d.geometry.TriangleMesh.create_box(width=0.2, height=0.4, depth=0.2)
-    
-           # Convert numpy array to a Tensor for the direction
-
-    direction_tensor = o3d.core.Tensor(direction, dtype=o3d.core.Dtype.Float32)
-
-    # Perform the extrusion using the new length
-    # Assuming objectHandle is a legacy TriangleMesh object
-    mesh_extrusion = o3d.t.geometry.TriangleMesh.from_legacy(mesh2)
-    #extruded_shape = mesh_extrusion.extrude_linear(direction_tensor, scale=new_extrusion_length)
-    
-    
-    
-    
-    #backwards?
-    direction = direction = np.array([0, 0, -1])
-
-    direction_tensor = o3d.core.Tensor(direction, dtype=o3d.core.Dtype.Float32)
-
-    extruded_shape = mesh_extrusion.extrude_linear(direction_tensor, scale=float(0))
-
-
-    # Assuming you want to convert the tensor-based extruded shape back to legacy format for visualization
-    mesh2 = o3d.geometry.TriangleMesh(extruded_shape.to_legacy())
-
-    
-    # Perform the extrusion using the new length
-    # Assuming objectHandle is a legacy TriangleMesh object
-
-
-    # Assuming you want to convert the tensor-based extruded shape back to legacy format for visualization
-    mesh2 = o3d.geometry.TriangleMesh(extruded_shape.to_legacy())
-    
-    
-    
     mesh2.compute_vertex_normals()
     mesh2.translate(np.array([0.3, 0.5, 0.3]))
+    
+    
+    mesh3 = o3d.geometry.TriangleMesh.create_box(width=0.4, height=0.1, depth=0.2)
+    mesh3.compute_vertex_normals()
+    mesh3.translate(np.array([0.2, 0.1, 0.4]))
+    
+    
+    
+    
+    
+    
+    
+    
     mesh.paint_uniform_color([0.5, 0.5, 0.5]) 
     mesh2.paint_uniform_color([0.5, 0.5, 0.5]) 
+    mesh3.paint_uniform_color([0.5, 0.5, 0.5]) 
+
     
     
     
@@ -1153,6 +1156,8 @@ def main():
     )
     vis.add_geometry(mesh)
     vis.add_geometry(mesh2)
+    vis.add_geometry(mesh3)
+
     vis.get_render_option().background_color = np.array([0.25, 0.25, 0.25])
     grid = create_grid(size=15, n=20, plane='xz', color=[0.5, 0.5, 0.5])
 
@@ -1163,10 +1168,12 @@ def main():
     
     #setup camera draw distance
     camera = vis.get_view_control()
-    camera.set_constant_z_far(4000)
+    camera.set_constant_z_far(4500)
 
     objects_dict['object_1'] = {'object': mesh, 'center': mesh.get_center(), 'highlighted' : False, 'selected' : False,  'scale' : 100}
     objects_dict['object_2'] = {'object': mesh2, 'center': mesh2.get_center(), 'highlighted' : False, 'selected' : False, 'scale' : 100}
+    objects_dict['object_3'] = {'object': mesh3, 'center': mesh3.get_center(), 'highlighted' : False, 'selected' : False, 'scale' : 100}
+
 
 
 
