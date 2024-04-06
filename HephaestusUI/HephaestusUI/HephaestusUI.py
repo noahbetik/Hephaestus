@@ -1,7 +1,6 @@
 import open3d as o3d
 import win32gui
 import numpy as np
-import keyboard
 import socket as s
 import time
 import sys
@@ -9,6 +8,7 @@ from scipy.spatial.transform import Rotation as R
 from scipy.spatial.transform import Slerp
 from PySide6 import QtWidgets, QtGui, QtCore
 from PySide6.QtGui import QFont
+
 
 from camera_configs import predefined_extrinsics
 
@@ -40,18 +40,12 @@ extrusion_distance = 0
 direction = [0,0,1]
 
 
-
-
-
-
-
-
 class Open3DVisualizerWidget(QtWidgets.QWidget):
     def __init__(self, vis, parent=None):
         super(Open3DVisualizerWidget, self).__init__(parent)
         self.vis = vis
         self.initUI()
-
+        
     def initUI(self):
         # Assuming your Open3D window has been created with vis.create_window()
         hwnd = win32gui.FindWindowEx(0, 0, None, "Open3D")  # Find the Open3D window; might need adjustment
@@ -80,6 +74,8 @@ class MainWindow(QtWidgets.QMainWindow):
         super(MainWindow, self).__init__()
         self.setWindowTitle("Open3D and Text Display in PySide6")
         self.setGeometry(100, 100, 1280, 960)
+        self.setStyleSheet("background-color: darkgray;") 
+
 
         # Create a central widget and set a layout for it
         central_widget = QtWidgets.QWidget(self)
@@ -1130,6 +1126,8 @@ def main():
     
     mesh2.compute_vertex_normals()
     mesh2.translate(np.array([0.3, 0.5, 0.3]))
+    mesh.paint_uniform_color([0.5, 0.5, 0.5]) 
+    mesh2.paint_uniform_color([0.5, 0.5, 0.5]) 
     
     
     
