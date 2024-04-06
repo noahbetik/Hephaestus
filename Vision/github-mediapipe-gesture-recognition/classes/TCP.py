@@ -5,7 +5,7 @@ import socket
 class TCPCommunication:
     def __init__(self, gesture_processing):
         self.host = "localhost"
-        self.port = 4445
+        self.port = 4447
         self.connect()
         self.gesture_processing = gesture_processing
 

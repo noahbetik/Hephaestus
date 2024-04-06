@@ -186,8 +186,9 @@ def main():
                         left_hand_gesture_id = hand_sign_id
                     elif gesture_model.hand_label == "Right":
                         right_hand_gesture_id = hand_sign_id
-
-                    gesture_model.point_history.append(gesture_model.landmark_list[8])
+                        gesture_model.point_history.append(
+                            gesture_model.landmark_list[8]
+                        )
 
                 if confidence > confidence_threshold:
                     num_of_hands = temp_num_of_hands
