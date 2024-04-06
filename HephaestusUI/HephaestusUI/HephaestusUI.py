@@ -369,7 +369,7 @@ def getTCPData(sock):
         # Temporarily set a non-blocking mode to check for new data
         sock.setblocking(False)
         data = sock.recv(1024)  # Attempt to read more data
-        sock.setblocking(True)  # Revert to the original blocking mode
+        #sock.setblocking(True)  # Revert to the original blocking mode
 
         # Decode and append to buffer
         tcp_command_buffer += data.decode('ascii')
@@ -415,11 +415,13 @@ def parseCommand(
 
     # Check for selected objects in objects_dict and update objectHandle to point to the mesh if selected
     for object_id, obj_info in objects_dict.items():
+        if object_id == 'original':  # Skip the 'original' entry
+            continue
         if obj_info.get('selected', False):  # Check if the 'selected' key exists and is True
             objectHandle = obj_info['object']  # Now, objectHandle directly references the mesh object
             print(f"Selected object: {object_id}")
             break  # Assume only one object can be selected at a time; break after finding the first selected object
-     # Assume only one object can be selected at a time; break after finding the first selected object
+
 
   
 
@@ -478,6 +480,8 @@ def highlight_objects_near_camera(vis, view_control, objects_dict):
 
     # Find the object closest to the camera
     for object_id, info in objects_dict.items():
+        if object_id == 'original':  # Skip the 'original' entry
+            continue
         obj = info['object']
         centroid = info['center']
 
@@ -489,6 +493,8 @@ def highlight_objects_near_camera(vis, view_control, objects_dict):
 
     # Highlight the closest object and unhighlight others
     for object_id, info in objects_dict.items():
+        if object_id == 'original':  # Skip the 'original' entry
+             continue
         obj = info['object']
         if object_id == closest_object_id:
             # Highlight the closest object
@@ -622,6 +628,8 @@ def handleCam(subcommand, view_control, history, vis):
                     print("camera rotate update")
                     delta = float(subcommand[2]) - float(history["lastVal"])
                     rotate_camera(view_control, history["axis"], degrees=delta * alphaR)
+                    highlight_objects_near_camera(vis, view_control, objects_dict)
+
 
                 case "zoom":
                     print("camera zoom update")
@@ -744,6 +752,15 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, geometry_dir)
                 vis.update_geometry(pcd)
                 vis.update_geometry(ls)
 
+def clone_mesh(mesh):
+    cloned_mesh = o3d.geometry.TriangleMesh()
+    cloned_mesh.vertices = o3d.utility.Vector3dVector(np.array(mesh.vertices))
+    cloned_mesh.triangles = o3d.utility.Vector3iVector(np.array(mesh.triangles))
+    cloned_mesh.vertex_normals = o3d.utility.Vector3dVector(np.array(mesh.vertex_normals))
+    cloned_mesh.vertex_colors = o3d.utility.Vector3dVector(np.array(mesh.vertex_colors))
+    # If you have other attributes like texture coordinates, you'll need to copy them as well
+    return cloned_mesh
+
 def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects_dict):
     alphaM = 0.01  # Translation scaling factor
     alphaR = 1  # Rotation scaling factor (in radians for Open3D)
@@ -762,7 +779,9 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
         case "end":
             print("Ending motion")
             # Reset the history after operation ends
-            #if(history["operation"] == "extrude"):      
+            if(history["operation"] == "extrude"):    
+                if 'original' in objects_dict:  
+                  del objects_dict['original']
                 #vis.remove_geometry(objectHandle, reset_bounding_box=False)
           
                 # vis.remove_geometry(objectHandle, reset_bounding_box=False)
@@ -853,6 +872,8 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
 
                             selected_object_id = None
                             for object_id, obj_info in objects_dict.items():
+                                if object_id == 'original':  # Skip the 'original' entry
+                                      continue
                                 if obj_info.get('selected', False):  # Find the selected object
                                     selected_object_id = object_id
                                     # Update the scale of the selected object
@@ -872,46 +893,81 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
 
                         except Exception as e:
                             print(f"Error processing numerical values from command: {e}")
-                            
+                                
                     case "extrude":
-                        #snap_to_closest_plane(vis, vis.get_view_control())
                         try:
-                            # Calculate the new extrusion distance as before
+                            # Calculate the new extrusion distance
                             delta = float(subcommand[2]) - float(history["lastVal"])
+                            print("delta is ", delta)
                             extrusion_distance = delta / alphaE
                             
                             # Update the cumulative change tracker
                             history['last_extrusion_distance'] += delta / alphaE  
+                            print("***********************total extrusion so far:, ",  history['total_extrusion'] )
 
-                            # Check if the cumulative change exceeds the threshold of 0.1
-                            if abs(history['last_extrusion_distance']) >= 0.1:
-                                
+
+                            new_total_extrusion = history['total_extrusion'] + abs(extrusion_distance)
+                            if new_total_extrusion > 0.8:
+                                  print("Maximum extrusion limit reached. No further extrusion will be performed.")
+                                  
+                                  
+                            elif history['last_extrusion_distance'] >= 0.06:
                                 vis.remove_geometry(objectHandle, reset_bounding_box=False)
+                                history['total_extrusion'] += 0.07
+                                # Save the original state if not saved yet
+                                if 'original' not in objects_dict:
+                                    objects_dict['original'] = clone_mesh(objectHandle)
+                                    
                                 direction = np.array([0, 0, 1])  # Z-axis extrusion direction
                                 direction_tensor = o3d.core.Tensor(direction, dtype=o3d.core.Dtype.Float32)
 
                                 # Perform the extrusion using the accumulated distance
                                 mesh_extrusion = o3d.t.geometry.TriangleMesh.from_legacy(objectHandle)
-                                extruded_shape = mesh_extrusion.extrude_linear(direction_tensor, scale=history['last_extrusion_distance'])
+                                extruded_shape = mesh_extrusion.extrude_linear(direction_tensor, scale= 0.06)
                                 filled = extruded_shape.fill_holes()
+                                
+
+                                
 
                                 # Convert back to legacy format and update visualization
                                 objectHandle = o3d.geometry.TriangleMesh(filled.to_legacy())
                                 objectHandle.compute_vertex_normals()
                                 objectHandle.paint_uniform_color([0.540, 0.68, 0.52])
                                 vis.add_geometry(objectHandle, reset_bounding_box=False)
+                                print("Extruding by", history['last_extrusion_distance'])
 
                                 # Reset the cumulative change tracker after extrusion
                                 history['last_extrusion_distance'] = 0.0
 
-                                print("Extruding by", history['last_extrusion_distance'])
-                                objects_dict['object_2'] = {'object': objectHandle, 'center': objectHandle.get_center(), 'highlighted' : True, 'selected' : True, 'scale' : 100}
+                                objects_dict['object_2'] = {'object': objectHandle, 'center': objectHandle.get_center(), 'highlighted': True, 'selected': True, 'scale': 100}
+                         
+                                  
+                                  
+                            if history['last_extrusion_distance'] <= -1.1:
+                            # If the extrusion is negative, revert to the original state
+                                if 'original' in objects_dict:
+                                    history['total_extrusion'] = 0
+
+                                    vis.remove_geometry(objectHandle, reset_bounding_box=False)
+                                    objectHandle = clone_mesh(objects_dict['original'])
+                                    objectHandle.compute_vertex_normals()
+                                    vis.add_geometry(objectHandle, reset_bounding_box=False)
+                                    print("Reverted to the original state")
+                                    objects_dict['object_2'] = {'object': objectHandle, 'center': objectHandle.get_center(), 'highlighted': True, 'selected': True, 'scale': 100}
+
+
+                            # Reset the cumulative change tracker after reversion
+                                history['last_extrusion_distance'] = 0.0
+                            # Check if the cumulative change exceeds the threshold of 0.07
+                       
 
                             else:
                                 print("Accumulating changes, current cumulative change:", history['last_extrusion_distance'])
 
                         except Exception as e:
                             print(f"Error processing numerical values from command: {e}")
+
+
                     
 
 
@@ -925,6 +981,8 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
 
 def handleSelection(objects_dict, vis, main_window):
     for object_id, obj_info in objects_dict.items():
+        if object_id == 'original':  # Skip the 'original' entry
+             continue
         if obj_info.get('highlighted', False):  # Check if the 'highlighted' key exists and is True
             obj_info['selected'] = True
             obj = obj_info['object']  # Correctly reference the Open3D object
@@ -938,6 +996,9 @@ def handleSelection(objects_dict, vis, main_window):
 
 def handleDeselection(objects_dict, vis, main_window):
     for object_id, obj_info in objects_dict.items():
+        if object_id == 'original':  # Skip the 'original' entry
+            del objects_dict['original']
+            continue
         if obj_info.get('selected', False):  # Check if the 'selected' key exists and is True
             obj_info['selected'] = False  # Mark the object as deselected
             obj_info['highlighted'] = False  # Mark the object as deselected
@@ -1031,7 +1092,7 @@ def main():
 
 
 
-    delta = float(0.1)
+    delta = float(0.3)
     new_extrusion_length = delta  # If you meant to add the difference to the current length, you'd add it here
     
     print("extruding by ", delta)
@@ -1041,12 +1102,24 @@ def main():
     mesh2 = o3d.geometry.TriangleMesh.create_box(width=0.2, height=0.4, depth=0.2)
     
            # Convert numpy array to a Tensor for the direction
+
     direction_tensor = o3d.core.Tensor(direction, dtype=o3d.core.Dtype.Float32)
 
     # Perform the extrusion using the new length
     # Assuming objectHandle is a legacy TriangleMesh object
     mesh_extrusion = o3d.t.geometry.TriangleMesh.from_legacy(mesh2)
-    extruded_shape = mesh_extrusion.extrude_linear(direction_tensor, scale=new_extrusion_length)
+    #extruded_shape = mesh_extrusion.extrude_linear(direction_tensor, scale=new_extrusion_length)
+    
+    
+    
+    
+    #backwards?
+    direction = direction = np.array([0, 0, -1])
+
+    direction_tensor = o3d.core.Tensor(direction, dtype=o3d.core.Dtype.Float32)
+
+    extruded_shape = mesh_extrusion.extrude_linear(direction_tensor, scale=float(0))
+
 
     # Assuming you want to convert the tensor-based extruded shape back to legacy format for visualization
     mesh2 = o3d.geometry.TriangleMesh(extruded_shape.to_legacy())
@@ -1091,7 +1164,7 @@ def main():
 
     # Initialize required dictionaries and parameters
     geometry_dir = {"counters": {"pcd": 0, "ls": 0, "mesh": 0}}
-    history = {"operation": "", "axis": "", "lastVal": "", 'last_extrusion_distance': 0.0}
+    history = {"operation": "", "axis": "", "lastVal": "", 'last_extrusion_distance': 0.0, 'total_extrusion': 0.0}
 
     main_window = MainWindow(vis)
     main_window.show()
