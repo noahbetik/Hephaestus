@@ -1,21 +1,18 @@
 import numpy as np
 import open3d as o3d
 
-# Generate some random points
-np.random.seed(0)
+# Generate uniformly distributed points in a cube
 points = np.random.rand(1000, 3)
 
 # Create a point cloud
 pcd = o3d.geometry.PointCloud()
 pcd.points = o3d.utility.Vector3dVector(points)
 
-# Estimate normals
+# Estimate normals for the point cloud
 pcd.estimate_normals()
 
-# Reconstruct the surface using ball pivoting
-rec_mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(
-    pcd, o3d.utility.DoubleVector([0.01, 0.01])
-)
+# Create a mesh from the point cloud using Poisson surface reconstruction
+mesh, _ = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(pcd)
 
-# Visualize the reconstructed mesh
-o3d.visualization.draw_geometries([rec_mesh])
+# Visualize the mesh
+o3d.visualization.draw_geometries([pcd, mesh])

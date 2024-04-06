@@ -12,17 +12,17 @@ mesh.compute_vertex_normals()
 
 pcd = mesh.sample_points_poisson_disk(3000)
 
-o3d.visualization.draw_geometries([pcd])
+#o3d.visualization.draw_geometries([pcd])
 '''alpha = 0.03
 print(f"alpha={alpha:.3f}")
 mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(pcd, alpha)
 mesh.compute_vertex_normals()
 o3d.visualization.draw_geometries([mesh], mesh_show_back_face=True)'''
 
-radii = [0.005, 0.01, 0.02, 0.04]
+'''radii = [0.005, 0.01, 0.02, 0.04]
 rec_mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(
     pcd, o3d.utility.DoubleVector(radii))
-o3d.visualization.draw_geometries([pcd, rec_mesh])
+o3d.visualization.draw_geometries([pcd, rec_mesh])'''
 
 '''with o3d.utility.VerbosityContextManager(
         o3d.utility.VerbosityLevel.Debug) as cm:
@@ -34,3 +34,9 @@ o3d.visualization.draw_geometries([mesh],
                                   front=[-0.4761, -0.4698, -0.7434],
                                   lookat=[1.8900, 3.2596, 0.9284],
                                   up=[0.2304, -0.8825, 0.4101])'''
+
+# Create a mesh from the point cloud using Poisson surface reconstruction
+mesh, _ = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(pcd)
+
+# Visualize the mesh
+o3d.visualization.draw_geometries([pcd, mesh])

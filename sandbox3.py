@@ -7,6 +7,8 @@ from shapely.geometry import Polygon, Point
 ps = [[0,0,0], [1,0,0], [1.5,1,0], [1,2,0], [0,2,0], [-0.5,1,0]]
 ps2 = [[0,0,1], [1,0,1], [1.5,1,1], [1,2,1], [0,2,1], [-0.5,1,1]]
 
+scalefactor = 25
+
 
 def generate_points_in_polygon(polygon, num_points):
     # Generate random points within the bounding box of the polygon
@@ -63,8 +65,6 @@ def scale_polygon_2d(polygon, scale_factor):
     # Translate the scaled polygon back to its original position
     scaled_polygon += centroid
 
-    print(scaled_polygon)
-
     return scaled_polygon.tolist()
 
 # Define a polygon (in this case, a hexagon)
@@ -77,9 +77,9 @@ num_points = 1000
 points = ps
 
 for p in range(len(ps) - 1):
-    points = points + linear_interpolate_3d(ps[p], ps[p+1], 10)
+    points = points + linear_interpolate_3d(ps[p], ps[p+1], scalefactor)
 
-points = points + linear_interpolate_3d(ps[-1], ps[0], 10)
+points = points + linear_interpolate_3d(ps[-1], ps[0], scalefactor)
 
 # Create a point cloud from the generated points
 pcd = o3d.geometry.PointCloud()
@@ -91,23 +91,54 @@ pcd = o3d.geometry.PointCloud()
 stacked = []
 
 for p in points:
-    for i in range(1, 10):
-        stacked.append([p[0], p[1], i/10])
+    for i in range(0, scalefactor+1):
+        stacked.append([p[0], p[1], i/scalefactor])
 
 points = points + stacked
 
-points = points + scale_polygon_2d(np.array(ps), 0.5)
-points = points + scale_polygon_2d(np.array(ps2), 0.5)
+for i in range (0, scalefactor):
+    scaled1 = scale_polygon_2d(np.array(ps), i/scalefactor)
+    scaled2 = scale_polygon_2d(np.array(ps2), i/scalefactor)
+    for p in range(len(scaled1) - 1):
+        scaled1 = scaled1 + linear_interpolate_3d(scaled1[p], scaled1[p+1], scalefactor)
+    scaled1 = scaled1 + linear_interpolate_3d(scaled1[-1], scaled1[0], scalefactor)
+    for p in range(len(scaled2) - 1):
+        scaled2 = scaled2 + linear_interpolate_3d(scaled2[p], scaled2[p+1], scalefactor)
+    scaled2 = scaled2 + linear_interpolate_3d(scaled2[-1], scaled2[0], scalefactor)
+        
+    points = points + scaled1 + scaled2
 
 pcd.points = o3d.utility.Vector3dVector(points)
-pcd.estimate_normals()
+distances = pcd.compute_nearest_neighbor_distance()
+avg_dist = np.mean(distances)
+pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.05, max_nn=50))
+pcd.orient_normals_consistent_tangent_plane(k=40)
+
+'''alpha = 0.03
+print(f"alpha={alpha:.3f}")
+mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(pcd, alpha)
+mesh.compute_vertex_normals()
+o3d.visualization.draw_geometries([mesh], mesh_show_back_face=True)'''
 
 
-radii = [0.005, 0.01, 0.02, 0.04]
+'''# Define your radii based on the average distance
+radii = [avg_dist / 2, avg_dist, avg_dist * 2, avg_dist * 4]
+
 rec_mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(
     pcd, o3d.utility.DoubleVector(radii))
-o3d.visualization.draw_geometries([pcd, rec_mesh])
-rec_mesh.compute_vertex_normals()
+#o3d.visualization.draw_geometries([pcd])
+rec_mesh.compute_vertex_normals()'''
+
+# Poisson surface reconstruction
+with o3d.utility.VerbosityContextManager(o3d.utility.VerbosityLevel.Debug) as cm:
+    mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
+        pcd, depth=12)
+
+# Paint the mesh to prevent it from being black
+mesh.paint_uniform_color([0.7, 0.7, 0.7])  # Light gray color
+
+mesh.compute_vertex_normals()
 
 # Visualize the point cloud
-o3d.visualization.draw_geometries([pcd, rec_mesh])
+o3d.visualization.draw_geometries([mesh])
+
