@@ -323,55 +323,57 @@ def smooth_transition(vis, view_control, target_extrinsic, steps=100):
         time.sleep(0.0001)
 
 
-def move_camera(view_control, direction, amount=1.5):
-    cam_params = view_control.convert_to_pinhole_camera_parameters()
-    extrinsic = np.array(cam_params.extrinsic)
-
-    if direction == "forward":
-        extrinsic[2, 3] -= amount
-    elif direction == "backward":
-        extrinsic[2, 3] += amount
-    elif direction == "left":
-        extrinsic[0, 3] -= amount
-    elif direction == "right":
-        extrinsic[0, 3] += amount
-    elif direction == "up":
-        extrinsic[1, 3] -= amount
-    elif direction == "down":
-        extrinsic[1, 3] += amount
-
-    print(extrinsic[0, 3])
-
-    cam_params.extrinsic = extrinsic
-    view_control.convert_from_pinhole_camera_parameters(cam_params, True)
-
 
 def move_camera_v2(view_control, direction, amount=1.5):
-    global zoomFactor
     cam_params = view_control.convert_to_pinhole_camera_parameters()
     extrinsic = np.array(cam_params.extrinsic)
 
     if direction == "x":
-        extrinsic[2, 3] += amount
+        extrinsic[2, 3] -= amount
     elif direction == "y":
-        extrinsic[0, 3] += amount
+        extrinsic[0, 3] -= amount
     elif direction == "z":
-        extrinsic[1, 3] += amount
+        extrinsic[1, 3] -= amount
 
     cam_params.extrinsic = extrinsic
     view_control.convert_from_pinhole_camera_parameters(cam_params, True)
-    zoomFactor += amount/2
-
-def move_camera_v3(view_control, vals):
+    
+def move_camera_v3(view_control, vals, threshold=0.015):
+    """
+    Moves the camera based on the provided values, ignoring movements that are below a specified threshold.
+    
+    Parameters:
+    - view_control: The view control object to manipulate the camera's extrinsic parameters.
+    - vals: A tuple or list with two elements indicating the amount of movement in the y and z axes, respectively.
+    - threshold: The minimum movement required to apply the camera movement. Movements below this threshold are ignored.
+    """
     cam_params = view_control.convert_to_pinhole_camera_parameters()
     extrinsic = np.array(cam_params.extrinsic)
 
-    # x axis handled by zoom
-    extrinsic[0, 3] += vals[0] # y axis
-    extrinsic[1, 3] += vals[1] # z axis
+    # Initialize a variable to track if any significant movement occurred
+    significant_movement = False
 
-    cam_params.extrinsic = extrinsic
-    view_control.convert_from_pinhole_camera_parameters(cam_params, True)
+    # Check and apply movement for the y axis if it exceeds the threshold
+    if abs(vals[0]) > threshold:
+        extrinsic[0, 3] += vals[0]
+        significant_movement = True
+    else:
+        print("Y-axis movement below threshold, ignoring.")
+
+    # Check and apply movement for the z axis if it exceeds the threshold
+    if abs(vals[1]) > threshold:
+        extrinsic[1, 3] += vals[1]
+        significant_movement = True
+    else:
+        print("Z-axis movement below threshold, ignoring.")
+
+    # If any significant movement occurred, update the camera parameters
+    if significant_movement:
+        cam_params.extrinsic = extrinsic
+        view_control.convert_from_pinhole_camera_parameters(cam_params, True)
+    else:
+        print("No significant movement detected.")
+
 
 
 def rotate_camera(view_control, axis, degrees=5):
@@ -592,8 +594,6 @@ def parseCommand(
         case "create":
             snapCount = 0
             deleteCount = 0
-
-            
             handleNewGeo(info[1:], view_control, camera_parameters, vis, objects_dict, ls_dict, counters, main_window)
             return ""
         case "update":
@@ -712,10 +712,32 @@ def removeGeometry(vis, obj, id):
     print("deleted object ", id)
     return
 
-def addGeometry(vis, obj):
-    obj.paint_uniform_color(regularColor)  # Reset the object color to grey
+def addGeometry(vis, obj, objects_dict):
+    # Generate a unique object ID based on the current number of items in objects_dict
+    object_id = f"object_{len(objects_dict) + 1}"
+    
+    # Compute the center of the object for translation to the origin
+    center = obj.get_center()
+    translation_vector = -center  # Vector to move the object's center to the origin
+    
+    # Translate the object to the origin
+    obj.translate(translation_vector, relative=False)
+    
+    # Update the object's color
+    obj.paint_uniform_color([0.5, 0.5, 0.5])  # Reset the object color to grey
+    
+    # Add the object to the visualizer
     vis.add_geometry(obj)
-    return
+    
+    # Add the new object to objects_dict with its properties
+    objects_dict[object_id] = {
+        'object': obj, 
+        'center': [0, 0, 0],  # Object is now at the origin
+        'highlighted': False, 
+        'selected': False, 
+        'scale': 100
+    }
+    
               
 import numpy as np
 
@@ -870,28 +892,28 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, geometry_dir,
     global view_axis
 
     alphaL = 0.002 # line scaling factor (maybe better way to do this)
-    #print("***********subcommand[0] ", subcommand[0])
-    #print("***********subcommand[1] ", subcommand[1])
+    print("***********subcommand[0] ", subcommand[0])
+    print("***********subcommand[1] ", subcommand[1])
     
 
 
     match subcommand[0]:
         case "box":
-            print("Creating new box with dimensions ___ at ___")
-            coords = list(map(float, subcommand[1].strip("()").split(",")))
-            dimensions = list(map(float, subcommand[2].strip("()").split(",")))
-
+            print("Creating new box at origin")
+    
             # Store the current view matrix
             current_view_matrix = (
                 view_control.convert_to_pinhole_camera_parameters().extrinsic
             )
 
-            new_box = o3d.geometry.TriangleMesh.create_box(
-                width=dimensions[0], height=dimensions[1], depth=dimensions[2]
-            )
+            new_box = o3d.geometry.TriangleMesh.create_box(width=0.2, height=0.2, depth=0.2)
             new_box.compute_vertex_normals()
-            new_box.translate(np.array(coords))
             addGeometry(vis,new_box)
+            
+            
+            
+            
+            
             name = "mesh" + str(geometry_dir["counters"]["mesh"])
             geometry_dir[name] = new_box
             geometry_dir["counters"]["mesh"] += 1
@@ -1065,10 +1087,12 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
     alphaR = 1  # Rotation scaling factor (in radians for Open3D)
     alphaS = 100  # Scaling scaling factor
     alphaE = 100 #extrusion scaling factor
+    direction = [1,0,0]
+
     
     
     global extrusion_distance
-    global direction
+    global prevRotated
 
     match subcommand[1]:
         case "start":
@@ -1077,8 +1101,18 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
             history["axis"] = subcommand[2] if len(subcommand) > 2 else None  # Axis, if applicable
             history["lastVal"] = subcommand[3] if len(subcommand) > 3 else None  # Starting value, if applicable
             
+            
+            print("subcommand is, ",subcommand[0], " and prevRotated is ",prevRotated)
             if (subcommand[0] == "extrude" and prevRotated):
-                snap_to_closest_plane(vis, vis.get_view_control())
+                view_control = vis.get_view_control()
+                cam_params = view_control.convert_to_pinhole_camera_parameters()
+                current_extrinsic = cam_params.extrinsic
+
+                
+                updated_extrinsic = current_extrinsic.copy()
+                updated_extrinsic[:3, :3] = np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]])
+
+                smooth_transition(vis, view_control, updated_extrinsic)
                 prevRotated=False
         case "end":
             #print("Ending motion")
@@ -1086,7 +1120,7 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
             main_window.update_dynamic_text("Waiting for command...")
             
             if(history["operation"] == "extrude"):   
-                objectHandle.paint_uniform_color(closestColor)  #back to green 
+                objectHandle.paint_uniform_color(selectedColor) #back to selected
                 vis.update_geometry(objectHandle)            
                 history['total_extrusion_x'] = 0
                 history['total_extrusion_y'] = 0
@@ -1110,16 +1144,23 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                             
                             deltaX = (currentX - oldX) * alphaM
                             deltaY = (currentY - oldY) * alphaM
+                            # Define a threshold for movement to be considered significant.
+                            threshold = 0.02  # Adjust this value based on your requirements
+
                             view_control = vis.get_view_control()
                             cam_params = view_control.convert_to_pinhole_camera_parameters()
                             rotation_matrix = np.linalg.inv(cam_params.extrinsic[:3, :3])
 
-                            view_space_translation = np.array([deltaX, deltaY, 0])
+                            view_space_translation = np.array([deltaX if abs(deltaX) > threshold else 0, 
+                                                            deltaY if abs(deltaY) > threshold else 0, 0])
                             world_space_translation = rotation_matrix.dot(view_space_translation)
-                            
-                            objectHandle.translate(world_space_translation, relative=True)
-                            objects_dict[object_id]['center'] = objectHandle.get_center()
-                            objects_dict[object_id]['original'].translate(world_space_translation, relative=True)
+
+                            # Only apply translation if there's significant movement
+                            if np.linalg.norm(view_space_translation) > 0:
+                                objectHandle.translate(world_space_translation, relative=True)
+                                objects_dict[object_id]['center'] = objectHandle.get_center()
+                                if 'original' in objects_dict[object_id]:
+                                    objects_dict[object_id]['original'].translate(world_space_translation, relative=True)
 
                             #print("Translating object by", world_space_translation)
                             
@@ -1128,6 +1169,7 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                         except Exception as e:
                             #print(f"Error processing numerical values from command: {e}")
                             pass
+
                            
                     case "rotate": 
                         
@@ -1285,9 +1327,6 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                 vis.update_geometry(objectHandle)
                 history["lastVal"] = subcommand[2]
 
-        case _:
-            #print("Invalid command")
-            pass
 
 
 
@@ -1303,13 +1342,13 @@ def extrude(object_id, objectHandle, objects_dict, vis, history, direction):
 
     # Perform the extrusion
     mesh_extrusion = o3d.t.geometry.TriangleMesh.from_legacy(objectHandle)
-    extruded_shape = mesh_extrusion.extrude_linear(direction_tensor, scale=0.2)
+    extruded_shape = mesh_extrusion.extrude_linear(direction_tensor, scale=0.1)
 
     # Simplify the extruded shape before converting to legacy
     # Note: You might need to convert the tensor mesh back to a legacy mesh for simplification
     # if the tensor-based mesh does not directly support simplification.
     
-    simplified_extruded_shape = extruded_shape.to_legacy().simplify_quadric_decimation(target_number_of_triangles=250000)
+    simplified_extruded_shape = extruded_shape.to_legacy()#.simplify_quadric_decimation(target_number_of_triangles=750000)
 
     simplified_extruded_shape.compute_vertex_normals()
     simplified_extruded_shape.paint_uniform_color(closestColor)  # Set to light blue
@@ -1343,7 +1382,7 @@ def handleDeselection(objects_dict, vis, main_window):
             obj_info['selected'] = False  # Mark the object as deselected
             obj_info['highlighted'] = False  # Mark the object as deselected
             obj = obj_info['object']  # Correctly reference the Open3D object
-            obj.paint_uniform_color(regularColor)  # Reset the object color to grey
+            obj.paint_uniform_color([0.5, 0.5, 0.5])  # Reset the object color to grey
             vis.update_geometry(obj)
             print(f"Object {object_id} deselected")
             main_window.update_dynamic_text(f"Object {object_id} deselected")
@@ -1427,20 +1466,15 @@ def main():
     o3d.t
     print("Testing mesh in Open3D...")
 
-    mesh = o3d.geometry.TriangleMesh.create_box(width=0.2, height=0.2, depth=0.2)
+
+    mesh = o3d.geometry.TriangleMesh.create_box(width=0.2, height=0.4, depth=0.2)
     mesh.compute_vertex_normals()
-
-
-
-
-    mesh2 = o3d.geometry.TriangleMesh.create_box(width=0.2, height=0.4, depth=0.2)
+    mesh.translate(np.array([0.3, 0.5, 0.3]))
+    
+    
+    mesh2 = o3d.geometry.TriangleMesh.create_box(width=0.4, height=0.2, depth=0.2)
     mesh2.compute_vertex_normals()
-    mesh2.translate(np.array([0.3, 0.5, 0.3]))
-    
-    
-    mesh3 = o3d.geometry.TriangleMesh.create_box(width=0.4, height=0.2, depth=0.2)
-    mesh3.compute_vertex_normals()
-    mesh3.translate(np.array([0.2, 0.2, 0.4]))
+    mesh2.translate(np.array([0.2, 0.2, 0.4]))
     
     
     
@@ -1449,9 +1483,8 @@ def main():
     
     
     
-    mesh.paint_uniform_color(regularColor) 
-    mesh2.paint_uniform_color(regularColor) 
-    mesh3.paint_uniform_color(regularColor) 
+    mesh.paint_uniform_color([0.5, 0.5, 0.5]) 
+    mesh2.paint_uniform_color([0.5, 0.5, 0.5]) 
 
     
     
@@ -1466,10 +1499,9 @@ def main():
     )
     vis.add_geometry(mesh)
     vis.add_geometry(mesh2)
-    vis.add_geometry(mesh3)
 
-    vis.get_render_option().background_color = np.array(backgroundColor)
-    grid = create_grid(size=15, n=20, plane='xz', color=gridColor)
+    vis.get_render_option().background_color = np.array([0.25, 0.25, 0.25])
+    grid = create_grid(size=15, n=20, plane='xz', color=[0.5, 0.5, 0.5])
 
     # Add the grid to the visualizer
     vis.add_geometry(grid)
@@ -1482,7 +1514,6 @@ def main():
 
     objects_dict['object_1'] = {'object': mesh, 'center': mesh.get_center(), 'highlighted' : False, 'selected' : False,  'scale' : 100}
     objects_dict['object_2'] = {'object': mesh2, 'center': mesh2.get_center(), 'highlighted' : False, 'selected' : False, 'scale' : 100}
-    objects_dict['object_3'] = {'object': mesh3, 'center': mesh3.get_center(), 'highlighted' : False, 'selected' : False, 'scale' : 100}
 
 
     ls_dict = {}
