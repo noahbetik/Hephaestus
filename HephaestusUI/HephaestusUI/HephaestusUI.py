@@ -1,3 +1,4 @@
+from csv import list_dialects
 import open3d as o3d
 import win32gui
 import numpy as np
@@ -32,6 +33,7 @@ from camera_configs import faces
 
 snapCount = 0
 objects_dict = {}
+ls_dict = {}
 curr_highlighted = False
 prevRotated = True
 prevAdded = False
@@ -145,7 +147,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
     def on_action_button_clicked(self):
-        global objects_dict, snapCount, curr_highlighted, prevRotated ,prevAdded, prevSnapped , extrusion_distance, deleteCount
+        global objects_dict, ls_dict, snapCount, curr_highlighted, prevRotated ,prevAdded, prevSnapped , extrusion_distance, deleteCount
         # This method will be called when the button is clicked
         print("Reset button pressed!")
         
@@ -160,8 +162,15 @@ class MainWindow(QtWidgets.QMainWindow):
         for obj in objects_dict.values():
             self.vis.remove_geometry(obj['object'], reset_bounding_box=False)
 
-        objects_dict={}
+        objects_dict = {}
+
+        for k, v in ls_dict.items():
+            self.vis.remove_geometry(ls_dict[k], reset_bounding_box=False) # B===D
+
+        ls_dict = {}
+
         snap_isometric(self.vis, self.vis.get_view_control())
+        
         
 
     def update_dynamic_text(self, new_text):
@@ -571,7 +580,7 @@ def vectorDistance(p1, p2):
 
 
 def parseCommand(
-    command, view_control, camera_parameters, vis, geometry_dir, history, objects_dict, ls_dict, counters, main_window
+    command, view_control, camera_parameters, vis, geometry_dir, history, objects_dict, counters, main_window
 ):
     # FORMAT
     # [command] [subcommand]
@@ -595,13 +604,11 @@ def parseCommand(
             break  # Assume only one object can be selected at a time; break after finding the first selected object
 
 
-  
-
     match info[0]:
         case "motion":
             snapCount=0
             
-            print("**************************** ", info[1:][0])
+            #print("**************************** ", info[1:][0])
 
             if objectHandle == "" and info[1:][0] != "extrude":
                 main_window.update_mode_text("Camera")
@@ -631,8 +638,8 @@ def parseCommand(
             snapCount = 0
             deleteCount = 0
             if not prevAdded:
-                handleNewGeo(info[1:], view_control, camera_parameters, vis, objects_dict, ls_dict, counters, main_window)
-                prevAdded = True
+                handleNewGeo(info[1:], view_control, camera_parameters, vis, objects_dict, counters, main_window)
+                #prevAdded = True
             return ""
         case "update":
             snapCount = 0
@@ -933,8 +940,10 @@ def handleCam(subcommand, view_control, history, vis, main_window):
             print("INVALID COMMAND")
 
 
-def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict, ls_dict, counters, main_window):
+def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict, counters, main_window):
     global view_axis
+    global prevAdded
+    global ls_dict
 
     alphaL = 0.002 # line scaling factor (maybe better way to do this)
     #print("***********subcommand[0] ", subcommand[0])
@@ -949,6 +958,7 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict,
             new_box = o3d.geometry.TriangleMesh.create_box(width=0.2, height=0.2, depth=0.2)
             new_box.compute_vertex_normals()
             addGeometry(vis, new_box, objects_dict, "cube")
+            prevAdded = True
 
         case "sphere":
             print("Creating new sphere at origin")
@@ -958,6 +968,7 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict,
             new_sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.1)
             new_sphere.compute_vertex_normals()
             addGeometry(vis, new_sphere, objects_dict, "sphere")
+            prevAdded = True
 
 
         case "triangle":
@@ -990,6 +1001,7 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict,
                                                     triangles=o3d.utility.Vector3iVector(triangles))
             new_triangle.compute_vertex_normals()
             addGeometry(vis, new_triangle, objects_dict, "triangle")
+            prevAdded = True
 
 
         case "line":  # line handling not fully implemented yet
@@ -1055,14 +1067,13 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict,
 
                 lsName = "ls" + str(counters["ls"])
                 counters["ls"] += 1
-                print(counters["ls"])
 
                 pcdName = "pcd" + str(counters["pcd"])
                 counters["pcd"] += 1
 
                 ls_dict[lsName] = ls
                 ls_dict[pcdName] = pcd
-
+                
 
                 # Set back the stored view matrix
                 camera_parameters.extrinsic = current_view_matrix
@@ -1087,6 +1098,9 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict,
                     ls.lines.extend(o3d.utility.Vector2iVector(np.array([[len(pcd.points), 0]])))
                 else:
                     print("NO CONNECTY WECTY")
+                    
+                ls_dict[ls_id] = ls
+                ls_dict[pcd_id] = pcd
 
                 vis.update_geometry(pcd)
                 vis.update_geometry(ls)
@@ -1137,6 +1151,9 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict,
                     pcd.points.extend(add_this)  # get proper references for this
                     ls.points.extend(add_this)  # get proper references for this
                     ls.lines.extend(o3d.utility.Vector2iVector(np.array([[len(pcd.points) - 1, len(pcd.points)]])))
+                    
+                    ls_dict[ls_id] = ls
+                    ls_dict[pcd_id] = pcd
 
                     vis.update_geometry(pcd)
                     vis.update_geometry(ls)
@@ -1517,14 +1534,15 @@ def handleDeselection(objects_dict, vis, main_window):
             break  # Exit the loop once an object is marked as deselected
 
 
-def handle_commands(clientSocket, vis, view_control, camera_parameters, geometry_dir, history, objects_dict, ls_dict, counters, main_window):
+def handle_commands(clientSocket, vis, view_control, camera_parameters, geometry_dir, history, objects_dict, counters, main_window):
     try:
         # Attempt to receive data, but don't block indefinitely
         clientSocket.settimeout(0.1)  # Non-blocking with timeout
         command = getTCPData(clientSocket, len(ls_dict))
+
         if command:
             # Parse and handle the command
-            parseCommand(command, view_control, camera_parameters, vis, geometry_dir, history, objects_dict, ls_dict, counters, main_window)
+            parseCommand(command, view_control, camera_parameters, vis, geometry_dir, history, objects_dict, counters, main_window)
             vis.poll_events()
             vis.update_renderer()
             # main_window.update_dynamic_text(command)
@@ -1647,7 +1665,7 @@ def main():
 
     # Setup a QTimer to periodically check for new commands
     timer = QtCore.QTimer()
-    timer.timeout.connect(lambda: handle_commands(clientSocket, vis, view_control, camera_parameters, geometry_dir, history, objects_dict, ls_dict, counters, main_window))
+    timer.timeout.connect(lambda: handle_commands(clientSocket, vis, view_control, camera_parameters, geometry_dir, history, objects_dict, counters, main_window))
     timer.start(25)  # Check every 100 milliseconds
     
 

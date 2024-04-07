@@ -28,7 +28,7 @@ class TCPCommunication:
                 ready = select.select([self.connection], [], [], 5)  # 5 second timeout
                 if ready[0]:
                     data = self.connection.recv(1024).decode("ascii")
-                    if data.strip() == "ACK":
+                    if data.split(" ")[0].strip() == "ACK":
                         print("Acknowledgment received.")
                     else:
                         print("Failed to receive acknowledgment. Discarding packet.")

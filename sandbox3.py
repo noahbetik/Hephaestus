@@ -134,6 +134,17 @@ with o3d.utility.VerbosityContextManager(o3d.utility.VerbosityLevel.Debug) as cm
     mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
         pcd, depth=12)
 
+'''# Use ball pivoting algorithm to create a mesh with adjusted radii
+# The radii should be chosen based on the distribution of your points
+radii = [0.001, 0.005, 0.01, 0.04, 0.08]  # Adjust these based on your specific point cloud
+mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(
+    pcd, o3d.utility.DoubleVector(radii))'''
+
+'''mesh_extrusion = o3d.t.geometry.TriangleMesh.from_legacy(rec_mesh)
+for i in range(1, 31):
+    mesh_extrusion.fill_holes(1 * (2 ** i))
+filled = mesh_extrusion.to_legacy()'''
+
 # Paint the mesh to prevent it from being black
 mesh.paint_uniform_color([0.7, 0.7, 0.7])  # Light gray color
 

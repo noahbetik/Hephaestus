@@ -2,7 +2,7 @@ import numpy as np
 import open3d as o3d
 from scipy.spatial import Delaunay
 
-def fibonacci_sphere(samples=1000, randomize=True):
+def fibonacci_sphere(samples=100, randomize=True):
     rnd = 1.
     if randomize:
         rnd = np.random.random() * samples
@@ -22,7 +22,7 @@ def fibonacci_sphere(samples=1000, randomize=True):
     return points
 
 # Generate points on the sphere
-num_samples = 8000
+num_samples = 4000
 sphere_points = fibonacci_sphere(samples=num_samples)
 
 
@@ -43,5 +43,10 @@ radii = [0.005, 0.01, 0.02, 0.04]  # Adjust these based on your specific point c
 rec_mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(
     pcd, o3d.utility.DoubleVector(radii))
 
+mesh_extrusion = o3d.t.geometry.TriangleMesh.from_legacy(rec_mesh)
+for i in range(1, 31):
+    mesh_extrusion.fill_holes(1 * (2 ** i))
+filled = mesh_extrusion.to_legacy()
+
 # Visualize the mesh and the point cloud
-o3d.visualization.draw_geometries([rec_mesh])
+o3d.visualization.draw_geometries([filled])
