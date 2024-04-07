@@ -331,7 +331,7 @@ def main():
                         left_hand_gesture_id != prev_left_hand_gesture_id
                         or right_hand_gesture_id != prev_right_hand_gesture_id
                     )
-                    if left_hand_gesture_id == 5 or right_hand_gesture_id == 5:
+                    if left_hand_gesture_id == 5: #or right_hand_gesture_id == 5:
                         state_machine = 3
                         print("Terminating gesture due to thumbs-down")
                         continue
@@ -371,16 +371,17 @@ def main():
                         gesture_end_command = f"{gesture_type} {gesture_subtype} end"
                         tcp_communication.send_command(gesture_end_command)
                 # print(gesture_end_command)
-                left_hand_gesture_id = None
-                right_hand_gesture_id = None
-                prev_num_of_hands = None
                 prev_left_hand_gesture_id = None
                 prev_right_hand_gesture_id = None
 
                 sys.stdout.write(f"\rThere is no hand in view")
                 sys.stdout.flush()
+       
 
             cv.imshow("Hand Gesture Recognition", camera.debug_image)
+            left_hand_gesture_id = None
+            right_hand_gesture_id = None
+            
         except Exception as e:
             print(
                 f"Exception, continuing: {e}. If you are using your left hand, maybe try your right hand instead?"
