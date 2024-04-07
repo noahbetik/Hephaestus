@@ -57,9 +57,10 @@ def start_command(
     gesture_type,
     gesture_subtype,
     point_history,
+    camera,
     axis="z",
     snap_view="iso",
-    object="cube",
+    object="cube"
 ):
     match (gesture_type, gesture_subtype):
         case ("motion", "zoom"):  # 2 fingers
@@ -73,7 +74,7 @@ def start_command(
                 f"motion extrude start ({point_history[-1][0]},{point_history[-1][1]})"
             )
         case ("create", "line"):  # pointer
-            return f"create line start ({point_history[-2][0]},{point_history[-2][1]}) ({point_history[-1][0]},{point_history[-1][1]})"  # from noah: i do it this way to make parsing easier on UI side
+            return f"create line start ({point_history[-2][0]},{camera.cap_height-point_history[-2][1]}) ({point_history[-1][0]},{camera.cap_height-point_history[-1][1]})"  # from noah: i do it this way to make parsing easier on UI side
         case ("toggle", "mode"):
             return "toggle mode"
         case ("toggle", "motion"):
@@ -92,7 +93,7 @@ def start_command(
             return "Command not found"
 
 
-def active_command(gesture_type, gesture_subtype, point_history):
+def active_command(gesture_type, gesture_subtype, point_history, camera):
     match (gesture_type, gesture_subtype):
         case ("motion", "zoom"):
             return f"motion zoom position {point_history[-1][0]}"
@@ -105,7 +106,7 @@ def active_command(gesture_type, gesture_subtype, point_history):
         case ("motion", "extrude"):
             return f"motion extrude position ({point_history[-1][0]},{point_history[-1][1]})"
         case ("create", "line"):
-            return f"create line ({point_history[-1][0]},{point_history[-1][1]})"
+            return f"create line ({point_history[-1][0]},{camera.cap_height-point_history[-1][1]})"
         case ("toggle", "mode"):
             return "toggle mode"
         case ("toggle", "motion"):
@@ -148,6 +149,7 @@ def main():
     prev_right_hand_gesture_id = None
     axis = "x"
     view = "home"
+    object = "cube"
 
     gesture_types = load_gesture_definitions("./tcp/gestures.json")
 
@@ -316,6 +318,7 @@ def main():
                                 gesture_type,
                                 gesture_subtype,
                                 gesture_model.point_history,
+                                camera,
                                 axis,
                                 view,
                                 object,
@@ -351,7 +354,7 @@ def main():
                         print("Terminating gesture due to thumbs-down")
                         continue
                     gesture_active_command = active_command(
-                        gesture_type, gesture_subtype, gesture_model.point_history
+                        gesture_type, gesture_subtype, gesture_model.point_history, camera
                     )
                     tcp_communication.send_command(gesture_active_command)
                     # print(gesture_active_command)

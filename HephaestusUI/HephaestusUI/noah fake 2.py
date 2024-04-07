@@ -26,10 +26,6 @@ from camera_configs import faces
 # GLOBAL VARIABLES
 # ----------------------------------------------------------------------------------------
 
-# ----------------------------------------------------------------------------------------
-# HELPER FUNCTIONS
-# ----------------------------------------------------------------------------------------
-
 snapCount = 0
 objects_dict = {}
 curr_highlighted = False
@@ -39,7 +35,13 @@ marker = o3d.geometry.TriangleMesh.create_sphere(radius=0.02)
 previous_look_at_point = None
 zoomFactor = 0.25
 extrusion_distance = 0
-deleteCount = 0
+view_axis = ''
+
+# ----------------------------------------------------------------------------------------
+# HELPER FUNCTIONS
+# ----------------------------------------------------------------------------------------
+
+
 
 
 class Open3DVisualizerWidget(QtWidgets.QWidget):
@@ -478,7 +480,6 @@ def getTCPData(sock):
 
 def closeClient(sock):
     sock.close()
-    
 
 def vectorDistance(p1, p2):
     # Extract coordinates
@@ -488,7 +489,6 @@ def vectorDistance(p1, p2):
     # Calculate the distance
     distance = ((x2 - x1) ** 2 + (y2 - y1) ** 2 + (z2 - z1) ** 2) ** 0.5
     return distance
-
 
 # ----------------------------------------------------------------------------------------
 # PARSE COMMAND
@@ -503,7 +503,6 @@ def parseCommand(
 
     global prevRotated
     global snapCount
-    global deleteCount
     info = command.split(" ")
     print(info)
     objectHandle = ""    
@@ -511,6 +510,8 @@ def parseCommand(
 
     # Check for selected objects in objects_dict and update objectHandle to point to the mesh if selected
     for id, obj_info in objects_dict.items():
+        if object_id == 'original':  # Skip the 'original' entry
+            continue
         if obj_info.get('selected', False):  # Check if the 'selected' key exists and is True
             objectHandle = obj_info['object']  # Now, objectHandle directly references the mesh object
             object_id = id
@@ -534,26 +535,19 @@ def parseCommand(
                 return ""
         case "select":
             snapCount = 0
-            deleteCount = 0
 
             return handleSelection(objects_dict, vis, main_window)  # Assume this function handles object selection
         case "deselect":
             snapCount = 0
-            deleteCount = 0
-
 
             return handleDeselection(objects_dict, vis, main_window)  # Assume this function handles object selection
         case "create":
             snapCount = 0
-            deleteCount = 0
-
 
             handleNewGeo(info[1:], view_control, camera_parameters, vis, objects_dict, ls_dict, counters)
             return ""
         case "update":
             snapCount = 0
-            deleteCount = 0
-
 
             # if objectHandle:
             #     if (prevRotated) : snap_to_closest_plane(vis, view_control)
@@ -564,17 +558,15 @@ def parseCommand(
             snap_isometric(vis, view_control)
         case "snap":
             snapCount+=1
-            if (snapCount>3):
+            if (snapCount>2):
                 snap_isometric(vis, view_control)
             else: snap_to_closest_plane(vis, view_control)
         case "delete":
-            deleteCount+=1
-            if (deleteCount>2 and objectHandle):
-                removeGeometry(vis, objectHandle, object_id)
-                deleteCount = 0
-
-    
-            elif 'original' in objects_dict[object_id] and object_id:
+        
+        #for extrusion, reset to original object
+            print("last operation was ", history["operation"])
+            print("reverting to original state")
+            if 'original' in objects_dict[object_id]:
                 history['total_extrusion_x'] = 0
                 history['total_extrusion_y'] = 0
 
@@ -592,9 +584,12 @@ def parseCommand(
 
                 objects_dict[object_id]['total_extrusion_x'] = 0.0
                 objects_dict[object_id]['total_extrusion_y'] = 0.0
-                objects_dict[object_id]['selected'] = True
-                
             
+            
+
+
+
+
 
 def highlight_objects_near_camera(vis, view_control, objects_dict):
     # Get the camera position from the view control
@@ -658,12 +653,8 @@ def highlight_objects_near_camera(vis, view_control, objects_dict):
     vis.update_renderer()
 
 
-def removeGeometry(vis, obj, id):
-    print("deleting object ", id)
-
-    vis.remove_geometry(obj, reset_bounding_box = False)
-    del objects_dict[id]
-    print("deleted object ", id)
+def removeGeometry(vis, object):
+    vis.remove_geometry(object)
     return
 
 def addGeometry(vis, obj):
@@ -671,40 +662,17 @@ def addGeometry(vis, obj):
     vis.add_geometry(obj)
     return
               
-import numpy as np
 
-def scale_object(objectHandle, delta, min_size=0.15, max_size=1.5):
-    # Intended scale factor based on the delta
+
+def scale_object(objectHandle, delta):
     scaleFactor = 1 + delta
     
-    # Get the object's bounding box
-    bbox = objectHandle.get_axis_aligned_bounding_box()
-    extents = bbox.get_extent()  # This gives you the width, height, and depth of the bounding box
-    
-    # Calculate the new extents after scaling
-    new_extents = extents * scaleFactor
-    
-    # Check if any of the new extents fall below the minimum size
-    if np.any(new_extents < min_size):
-        print("Adjusting scale to prevent object from getting too small.")
-        required_scale_factors_for_min = min_size / extents
-        scaleFactor = max(required_scale_factors_for_min.max(), scaleFactor)
-
-    # Check if any of the new extents exceed the maximum size
-    elif np.any(new_extents > max_size):
-        print("Adjusting scale to prevent object from getting too large.")
-        required_scale_factors_for_max = max_size / extents
-        scaleFactor = min(required_scale_factors_for_max.min(), scaleFactor)
-
-    # If the final scale factor is significantly different from 1 + delta, we have made an adjustment
-    print(f"Adjusted scale factor: {scaleFactor:.2f}")
-    
     # Compute the object's center for uniform scaling about its center
-    center = bbox.get_center()
-    
-    # Apply the scaling
-    objectHandle.scale(scaleFactor, center)
+    print("increasing object scale by factor of ", delta)
+    center = objectHandle.get_center()
 
+    objectHandle.scale(scaleFactor, center)
+    # Apply the transformation
 
 
 def rotate_object(objectHandle, axis, degrees=5):
@@ -817,6 +785,7 @@ def handleCam(subcommand, view_control, history, vis):
 
 
 def handleNewGeo(subcommand, view_control, camera_parameters, vis, geometry_dir, ls_dict, counters):
+    
     global view_axis
 
     alphaL = 0.002 # line scaling factor (maybe better way to do this)
@@ -910,7 +879,6 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, geometry_dir,
 
                 lsName = "ls" + str(counters["ls"])
                 counters["ls"] += 1
-                print(counters["ls"])
 
                 pcdName = "pcd" + str(counters["pcd"])
                 counters["pcd"] += 1
@@ -998,6 +966,9 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, geometry_dir,
                     print(f"vector distances: {vd1}, {vd2}")
                     #return
 
+                
+
+
 def clone_mesh(mesh):
     cloned_mesh = o3d.geometry.TriangleMesh()
     cloned_mesh.vertices = o3d.utility.Vector3dVector(np.array(mesh.vertices))
@@ -1024,9 +995,8 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
             history["axis"] = subcommand[2] if len(subcommand) > 2 else None  # Axis, if applicable
             history["lastVal"] = subcommand[3] if len(subcommand) > 3 else None  # Starting value, if applicable
             
-            if (subcommand[0] == "extrude" and prevRotated):
+            if (subcommand[0] == "extrude"):
                 snap_to_closest_plane(vis, vis.get_view_control())
-                prevRotated=False
         case "end":
             #print("Ending motion")
             # Reset the history after operation ends
@@ -1037,6 +1007,8 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                 history['total_extrusion_x'] = 0
                 history['total_extrusion_y'] = 0
 
+                if 'original' in objects_dict:  
+                  del objects_dict['original']
 
         case "position":
                 match history["operation"]:
@@ -1099,23 +1071,14 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                                 if object_id == 'original':  # Skip the 'original' entry
                                       continue
                                 if obj_info.get('selected', False):  
-                                    new_scale = obj_info['scale'] + 100 * (delta / alphaS)
-
-                                    # Cap the new scale to be within the range [1, 200]
-                                    if new_scale < 1:
-                                        new_scale = 1
-                                    elif new_scale > 200:
-                                        new_scale = 200
-
-                                    # Update the scale in the object info
-                                    
-                                    obj_info['scale'] = new_scale
-                                    formatted_text = f"Scaling factor: {new_scale:.0f}%"
-                                    main_window.update_text(formatted_text)
+                                    selected_object_id = object_id
+                                    obj_info['scale'] += 100 * (delta / alphaS)
                                     break  
 
-
-
+                            if selected_object_id is not None:
+                                objectScale = objects_dict[selected_object_id]['scale']
+                                formatted_text = f"Scaling factor: {objectScale:.0f}%"
+                                main_window.update_text(formatted_text)
                             else:
                                 #print("No object is currently selected.")
                                 pass
@@ -1124,7 +1087,7 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                             scale_object(objects_dict[object_id]['original'], delta/alphaS)                
 
                         except Exception as e:
-                            print(f"Error processing numerical values from command: {e}")
+                            #print(f"Error processing numerical values from command: {e}")
                             pass
                                 
                     case "extrude":
@@ -1186,41 +1149,35 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                             #         objects_dict[object_id]['total_extrusion_x'] = 0.0
                             #         objects_dict[object_id]['total_extrusion_y'] = 0.0
                             
-                            if new_total_extrusion_x > 0.8:
+                            if new_total_extrusion_x > 0.75:
                                 print("Maximum extrusion limit in x direction reached. No further extrusion will be performed.")
-                                main_window.update_text("Maximum extrusion limit in x direction reached. No further extrusion will be performed.")
+                                main_window.update_text("Maximum extrusion limit reached. No further extrusion will be performed.")
                                 pass
 
-                            elif abs(history['last_extrusion_distance_x']) >= 0.25:##
-                                direction = [1,0,0]
-                                if history['last_extrusion_distance_x'] < 0:
-                                    direction = [-1,0,0]
-
+                            elif history['last_extrusion_distance_x'] >= 0.25:##
+                                direction = [0,0,1]
                                 objects_dict[object_id]['total_extrusion_x'] += 0.2
-                                print("extruding by 0.2 in x")
-
                                 extrude(object_id, objectHandle, objects_dict, vis, history, direction)
 
-                            if new_total_extrusion_y > 0.8:
+                            if new_total_extrusion_y > 0.75:
                                 print("Maximum extrusion limit in y direction reached. No further extrusion will be performed.")
-                                main_window.update_text("Maximum extrusion limit in y direction reached. No further extrusion will be performed.")
+                                main_window.update_text("Maximum extrusion limit reached. No further extrusion will be performed.")
                                 pass
 
 
-                            elif abs(history['last_extrusion_distance_y']) >= 0.25:##
+                            elif history['last_extrusion_distance_y'] >= 0.25:##
                                 objects_dict[object_id]['total_extrusion_y'] += 0.2
                                 direction = [0,1,0]
-
-                                if history['last_extrusion_distance_y'] < 0:
-                                    direction = [0,-1,0]
-                                print("extruding by 0.2 in y")
-
                                 extrude(object_id, objectHandle, objects_dict, vis, history, direction)
 
                                 #delta = deltaY
                             print("extrusion direction set to ", direction)
                                         
                                 
+
+
+
+
                         except Exception as e:
                             print(f"Error processing numerical values from command: {e}")
                          
@@ -1234,40 +1191,36 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
 
 
 
-
 def extrude(object_id, objectHandle, objects_dict, vis, history, direction):
-    vis.remove_geometry(objectHandle, reset_bounding_box=False)
+   
+        vis.remove_geometry(objectHandle, reset_bounding_box=False)
 
-    # Save the original state if not saved yet
-    if 'original' not in objects_dict[object_id]:
-        objects_dict[object_id]['original'] = clone_mesh(objectHandle)
+        # Check and save the original state if not saved yet
+        if 'original' not in objects_dict[object_id]:
+            objects_dict[object_id]['original'] = clone_mesh(objectHandle)
 
-    direction_tensor = o3d.core.Tensor(direction, dtype=o3d.core.Dtype.Float32)
+        direction_tensor = o3d.core.Tensor(direction, dtype=o3d.core.Dtype.Float32)
 
-    # Perform the extrusion
-    mesh_extrusion = o3d.t.geometry.TriangleMesh.from_legacy(objectHandle)
-    extruded_shape = mesh_extrusion.extrude_linear(direction_tensor, scale=0.2)
+        # Perform the extrusion
+        mesh_extrusion = o3d.t.geometry.TriangleMesh.from_legacy(objectHandle)
+        extruded_shape = mesh_extrusion.extrude_linear(direction_tensor, scale=0.2)
+        filled = extruded_shape#.fill_holes()
 
-    # Simplify the extruded shape before converting to legacy
-    # Note: You might need to convert the tensor mesh back to a legacy mesh for simplification
-    # if the tensor-based mesh does not directly support simplification.
-    
-    simplified_extruded_shape = extruded_shape.to_legacy().simplify_quadric_decimation(target_number_of_triangles=250000)
+        objectHandle = o3d.geometry.TriangleMesh(filled.to_legacy())
+        objectHandle.compute_vertex_normals()
+        objectHandle.paint_uniform_color([0.53, 0.81, 0.92])  # Set to light blue
+        vis.add_geometry(objectHandle, reset_bounding_box=False)
 
-    simplified_extruded_shape.compute_vertex_normals()
-    simplified_extruded_shape.paint_uniform_color([0.53, 0.81, 0.92])  # Set to light blue
+        objects_dict[object_id]['object'] = objectHandle  # Update the current object
+        history['last_extrusion_distance_x'] = 0.0
+        history['last_extrusion_distance_y'] = 0.0
 
-    # Update the visualizer and object dictionary
-    vis.add_geometry(simplified_extruded_shape, reset_bounding_box=False)
-    objects_dict[object_id]['object'] = simplified_extruded_shape
-
-    history['last_extrusion_distance_x'] = 0.0
-    history['last_extrusion_distance_y'] = 0.0
 
 
 def handleSelection(objects_dict, vis, main_window):
     for object_id, obj_info in objects_dict.items():
-
+        if object_id == 'original':  # Skip the 'original' entry
+             continue
         if obj_info.get('highlighted', False):  # Check if the 'highlighted' key exists and is True
             obj_info['selected'] = True
             obj = obj_info['object']  # Correctly reference the Open3D object
@@ -1281,7 +1234,9 @@ def handleSelection(objects_dict, vis, main_window):
 
 def handleDeselection(objects_dict, vis, main_window):
     for object_id, obj_info in objects_dict.items():
-
+        if object_id == 'original':  # Skip the 'original' entry
+            del objects_dict['original']
+            continue
         if obj_info.get('selected', False):  # Check if the 'selected' key exists and is True
             obj_info['selected'] = False  # Mark the object as deselected
             obj_info['highlighted'] = False  # Mark the object as deselected
@@ -1380,9 +1335,9 @@ def main():
     mesh2.translate(np.array([0.3, 0.5, 0.3]))
     
     
-    mesh3 = o3d.geometry.TriangleMesh.create_box(width=0.4, height=0.2, depth=0.2)
+    mesh3 = o3d.geometry.TriangleMesh.create_box(width=0.4, height=0.1, depth=0.2)
     mesh3.compute_vertex_normals()
-    mesh3.translate(np.array([0.2, 0.2, 0.4]))
+    mesh3.translate(np.array([0.2, 0.1, 0.4]))
     
     
     
