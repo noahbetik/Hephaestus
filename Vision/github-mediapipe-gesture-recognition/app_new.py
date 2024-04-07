@@ -45,13 +45,21 @@ gesture_list = {
     (1, 6): "One finger and a fist",
     (2, 6): "Two fingers and a fist",
     (4, 6): "Three fingers and a fist",
+    (1, 3): "Add CUBE",
+    (2, 3): "Add SPHERE",
+    (4, 3): "Add TRIANGLE",
     (10, 11): "Illuminati",
     (8, 7): "L Shape",
 }
 
 
 def start_command(
-    gesture_type, gesture_subtype, point_history, axis="z", snap_view="iso"
+    gesture_type,
+    gesture_subtype,
+    point_history,
+    axis="z",
+    snap_view="iso",
+    object="cube",
 ):
     match (gesture_type, gesture_subtype):
         case ("motion", "zoom"):  # 2 fingers
@@ -78,6 +86,8 @@ def start_command(
             return f"deselect"
         case ("delete", "None"):
             return f"delete"
+        case ("create", "object"):
+            return f"create object {object}"
         case _:
             return "Command not found"
 
@@ -210,7 +220,8 @@ def main():
                     # How many hands are there?
                     # Single gesture
                     if num_of_hands == 1 and (
-                        hand_sign_id != 6
+                        hand_sign_id != 0
+                        and hand_sign_id != 6
                         and hand_sign_id != 7
                         and hand_sign_id != 8
                         and hand_sign_id != 10
@@ -289,10 +300,13 @@ def main():
                             match left_hand_gesture_id:
                                 case 1:  # 1 finger
                                     axis = "x"
+                                    object = "cube"
                                 case 2:  # 2 fingers
                                     axis = "y"
+                                    object = "sphere"
                                 case 4:  # 3 fingers
                                     axis = "z"
+                                    object = "triangle"
                                 case 8:  # L_LeftHand, home
                                     view = "home"
                                 case 10:  # Illuminati_LeftHand, iso
@@ -304,9 +318,10 @@ def main():
                                 gesture_model.point_history,
                                 axis,
                                 view,
+                                object,
                             )
                             print("\n")
-                            # print(gesture_start_command)
+                            print(gesture_start_command)
                             tcp_communication.send_command(gesture_start_command)
                             if (
                                 gesture_types[gesture_list[right_hand_gesture_id]][
@@ -331,7 +346,7 @@ def main():
                         left_hand_gesture_id != prev_left_hand_gesture_id
                         or right_hand_gesture_id != prev_right_hand_gesture_id
                     )
-                    if left_hand_gesture_id == 5: #or right_hand_gesture_id == 5:
+                    if left_hand_gesture_id == 5:  # or right_hand_gesture_id == 5:
                         state_machine = 3
                         print("Terminating gesture due to thumbs-down")
                         continue
@@ -376,16 +391,13 @@ def main():
 
                 sys.stdout.write(f"\rThere is no hand in view")
                 sys.stdout.flush()
-       
 
             cv.imshow("Hand Gesture Recognition", camera.debug_image)
             left_hand_gesture_id = None
             right_hand_gesture_id = None
-            
+
         except Exception as e:
-            print(
-                f"Exception, continuing: {e}. If you are using your left hand, maybe try your right hand instead?"
-            )
+            print(f"\nException, continuing: {e}.\nTry your right hand instead?")
             continue
 
     tcp_communication.close()
