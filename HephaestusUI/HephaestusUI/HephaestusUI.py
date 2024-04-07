@@ -34,6 +34,7 @@ snapCount = 0
 objects_dict = {}
 curr_highlighted = False
 prevRotated = False
+prevAdded = False
 prevSnapped = False
 marker = o3d.geometry.TriangleMesh.create_sphere(radius=0.02)
 previous_look_at_point = None
@@ -247,17 +248,15 @@ def snap_isometric(vis, view_control):
     global prevSnapped
     # Obtain the current extrinsic parameters
     cam_params = view_control.convert_to_pinhole_camera_parameters()
-    current_extrinsic = cam_params.extrinsic
-    #print("Current Extrinsic:", current_extrinsic)
 
     #predefined extrinsic set for the isometric view
     target_extrinsic = np.array([
         [0.86600324, 0.0, 0.50003839, -0.1],
         [-0.21133220, -0.90629373, 0.36601965, 0.1],
-        [0.45318549, -0.42264841, -0.78485109, 0.75],
+        [0.45318549, -0.42264841, -0.78485109, 2.0],  # Increased from 0.75 to 2.0 for zooming out
         [0.0, 0.0, 0.0, 1.0]
     ])
-    
+
     # Execute the smooth transition to the new isometric view
     smooth_transition(vis, view_control, target_extrinsic)
     prevSnapped = False
@@ -550,6 +549,7 @@ def parseCommand(
     global prevRotated
     global snapCount
     global deleteCount
+    global prevAdded
     info = command.split(" ")
     print(info)
     objectHandle = ""    
@@ -569,18 +569,21 @@ def parseCommand(
     match info[0]:
         case "motion":
             snapCount=0
+            
+            print("**************************** ", info[1:][0])
 
-            if objectHandle == "":
+            if objectHandle == "" and info[1:][0] != "extrude":
                 main_window.update_mode_text("Camera")
                 handleCam(info[1:], view_control, history, vis, main_window)
                 return ""
-            else:
+            elif objectHandle:
                 # if (prevRotated) : snap_to_closest_plane(vis, view_control)
                 # prevRotated = False
                 main_window.update_mode_text("Object")
                 handleUpdateGeo(info[1:], history, objectHandle, vis, main_window, objects_dict, object_id)
                 return ""
         case "select":
+            prevAdded = False
             snapCount = 0
             deleteCount = 0
             main_window.update_mode_text("Object")
@@ -594,7 +597,9 @@ def parseCommand(
         case "create":
             snapCount = 0
             deleteCount = 0
-            handleNewGeo(info[1:], view_control, camera_parameters, vis, objects_dict, ls_dict, counters, main_window)
+            if not prevAdded:
+                handleNewGeo(info[1:], view_control, camera_parameters, vis, objects_dict, ls_dict, counters, main_window)
+                prevAdded = True
             return ""
         case "update":
             snapCount = 0
@@ -639,7 +644,11 @@ def parseCommand(
                 objects_dict[object_id]['total_extrusion_x'] = 0.0
                 objects_dict[object_id]['total_extrusion_y'] = 0.0
                 objects_dict[object_id]['selected'] = True
+                deleteCount = 0
                 
+        case _:
+            history["lastVal"] = info[1:][2]
+
             
 
 def highlight_objects_near_camera(vis, view_control, objects_dict):
@@ -727,7 +736,7 @@ def addGeometry(vis, obj, objects_dict):
     obj.paint_uniform_color([0.5, 0.5, 0.5])  # Reset the object color to grey
     
     # Add the object to the visualizer
-    vis.add_geometry(obj)
+    vis.add_geometry(obj, reset_bounding_box=False)
     
     # Add the new object to objects_dict with its properties
     objects_dict[object_id] = {
@@ -888,39 +897,50 @@ def handleCam(subcommand, view_control, history, vis, main_window):
             print("INVALID COMMAND")
 
 
-def handleNewGeo(subcommand, view_control, camera_parameters, vis, geometry_dir, ls_dict, counters, main_window):
+def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict, ls_dict, counters, main_window):
     global view_axis
 
     alphaL = 0.002 # line scaling factor (maybe better way to do this)
-    print("***********subcommand[0] ", subcommand[0])
-    print("***********subcommand[1] ", subcommand[1])
+    #print("***********subcommand[0] ", subcommand[0])
     
-
 
     match subcommand[0]:
-        case "box":
+        case "cube":
             print("Creating new box at origin")
-    
             # Store the current view matrix
-            current_view_matrix = (
-                view_control.convert_to_pinhole_camera_parameters().extrinsic
-            )
-
+            current_view_matrix = view_control.convert_to_pinhole_camera_parameters().extrinsic
+            # Create and add the cube
             new_box = o3d.geometry.TriangleMesh.create_box(width=0.2, height=0.2, depth=0.2)
             new_box.compute_vertex_normals()
-            addGeometry(vis,new_box)
-            
-            
-            
-            
-            
-            name = "mesh" + str(geometry_dir["counters"]["mesh"])
-            geometry_dir[name] = new_box
-            geometry_dir["counters"]["mesh"] += 1
-
-            # Set back the stored view matrix
+            addGeometry(vis, new_box, objects_dict)
+            # Restore the view matrix
             camera_parameters.extrinsic = current_view_matrix
             view_control.convert_from_pinhole_camera_parameters(camera_parameters, True)
+
+        case "sphere":
+            print("Creating new sphere at origin")
+            # Store the current view matrix
+            current_view_matrix = view_control.convert_to_pinhole_camera_parameters().extrinsic
+            # Create and add the sphere
+            new_sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.1)
+            new_sphere.compute_vertex_normals()
+            addGeometry(vis, new_sphere, objects_dict)
+
+
+        case "triangle":
+            print("Creating new triangle at origin")
+            # Store the current view matrix
+            current_view_matrix = view_control.convert_to_pinhole_camera_parameters().extrinsic
+            # Manually define a triangle mesh
+            vertices = np.array([[0, 0, 0], [0.1, 0, 0], [0.05, 0.1, 0]])  # Triangle vertices
+            triangles = np.array([[0, 1, 2]])  # Triangle indices
+            new_triangle = o3d.geometry.TriangleMesh(vertices=o3d.utility.Vector3dVector(vertices),
+                                                    triangles=o3d.utility.Vector3iVector(triangles))
+            new_triangle.compute_vertex_normals()
+            addGeometry(vis, new_triangle, objects_dict)
+            # Restore the view matrix
+
+            
         case "line":  # line handling not fully implemented yet
             main_window.update_dynamic_text("Drawing new line")
 

@@ -88,7 +88,7 @@ def start_command(
         case ("delete", "None"):
             return f"delete"
         case ("create", "object"):
-            return f"create object {object}"
+            return f"create {object}"
         case _:
             return "Command not found"
 
