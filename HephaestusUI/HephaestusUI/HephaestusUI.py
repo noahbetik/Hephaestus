@@ -41,6 +41,11 @@ zoomFactor = 0.25
 extrusion_distance = 0
 deleteCount = 0
 
+regularColor = [0.5, 0.5, 0.5]
+closestColor = [0.0, 0.482, 1.0]
+selectedColor = [0.157, 0.655, 0.271]
+backgroundColor = [0.11, 0.11, 0.11]
+gridColor = [0.29, 0.29, 0.29]
 
 class Open3DVisualizerWidget(QtWidgets.QWidget):
     def __init__(self, vis, parent=None):
@@ -136,7 +141,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.mode_text_widget.setText(f"Mode: {new_text}")
 
 
-def create_grid(size=10, n=10, plane='xz', color=[0.5, 0.5, 0.5]):
+def create_grid(size=10, n=10, plane='xz', color=regularColor):
     """
     Create a grid in the specified plane.
     
@@ -622,7 +627,7 @@ def parseCommand(
                 vis.remove_geometry(objectHandle, reset_bounding_box=False)
                 objectHandle = clone_mesh(objects_dict[object_id]['original'])
                 objectHandle.compute_vertex_normals()
-                objectHandle.paint_uniform_color([0.540, 0.68, 0.52])  #back to green 
+                objectHandle.paint_uniform_color(closestColor)  #back to green 
                 vis.add_geometry(objectHandle, reset_bounding_box=False)
                 vis.update_geometry(objectHandle)
 
@@ -685,11 +690,11 @@ def highlight_objects_near_camera(vis, view_control, objects_dict):
         obj = info['object']
         if object_id == closest_object_id:
             # Highlight the closest object
-            obj.paint_uniform_color([0.640, 0.91, 0.62])  # Light green for highlighted object
+            obj.paint_uniform_color(closestColor)  # Light green for highlighted object
             info['highlighted'] = True
         else:
             # Unhighlight all other objects by resetting their color
-            obj.paint_uniform_color([0.5, 0.5, 0.5])  # Default color
+            obj.paint_uniform_color(regularColor)  # Default color
             info['highlighted'] = False
         
         # Update the geometry to reflect changes
@@ -708,7 +713,7 @@ def removeGeometry(vis, obj, id):
     return
 
 def addGeometry(vis, obj):
-    obj.paint_uniform_color([0.5, 0.5, 0.5])  # Reset the object color to grey
+    obj.paint_uniform_color(regularColor)  # Reset the object color to grey
     vis.add_geometry(obj)
     return
               
@@ -1081,7 +1086,7 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
             main_window.update_dynamic_text("Waiting for command...")
             
             if(history["operation"] == "extrude"):   
-                objectHandle.paint_uniform_color([0.540, 0.68, 0.52])  #back to green 
+                objectHandle.paint_uniform_color(closestColor)  #back to green 
                 vis.update_geometry(objectHandle)            
                 history['total_extrusion_x'] = 0
                 history['total_extrusion_y'] = 0
@@ -1192,7 +1197,7 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                             deltaX = (currentX - oldX) / alphaE
                             deltaY = (currentY - oldY) / alphaE
 
-                            objectHandle.paint_uniform_color([0.53, 0.81, 0.92])  # Set to light blue
+                            objectHandle.paint_uniform_color(closestColor)  # Set to light blue
                             
                             print("delta x is ",deltaX," delta y is ", deltaY)
                             
@@ -1307,7 +1312,7 @@ def extrude(object_id, objectHandle, objects_dict, vis, history, direction):
     simplified_extruded_shape = extruded_shape.to_legacy().simplify_quadric_decimation(target_number_of_triangles=250000)
 
     simplified_extruded_shape.compute_vertex_normals()
-    simplified_extruded_shape.paint_uniform_color([0.53, 0.81, 0.92])  # Set to light blue
+    simplified_extruded_shape.paint_uniform_color(closestColor)  # Set to light blue
 
     # Update the visualizer and object dictionary
     vis.add_geometry(simplified_extruded_shape, reset_bounding_box=False)
@@ -1323,7 +1328,7 @@ def handleSelection(objects_dict, vis, main_window):
         if obj_info.get('highlighted', False):  # Check if the 'highlighted' key exists and is True
             obj_info['selected'] = True
             obj = obj_info['object']  # Correctly reference the Open3D object
-            obj.paint_uniform_color([0.540, 0.68, 0.52])  # Paint the object darker green
+            obj.paint_uniform_color(selectedColor)  # Paint the object darker green
             vis.update_geometry(obj)
             print(f"Object {object_id} selected")
             main_window.update_dynamic_text(f"Object selected!")
@@ -1338,7 +1343,7 @@ def handleDeselection(objects_dict, vis, main_window):
             obj_info['selected'] = False  # Mark the object as deselected
             obj_info['highlighted'] = False  # Mark the object as deselected
             obj = obj_info['object']  # Correctly reference the Open3D object
-            obj.paint_uniform_color([0.5, 0.5, 0.5])  # Reset the object color to grey
+            obj.paint_uniform_color(regularColor)  # Reset the object color to grey
             vis.update_geometry(obj)
             print(f"Object {object_id} deselected")
             main_window.update_dynamic_text(f"Object {object_id} deselected")
@@ -1444,9 +1449,9 @@ def main():
     
     
     
-    mesh.paint_uniform_color([0.5, 0.5, 0.5]) 
-    mesh2.paint_uniform_color([0.5, 0.5, 0.5]) 
-    mesh3.paint_uniform_color([0.5, 0.5, 0.5]) 
+    mesh.paint_uniform_color(regularColor) 
+    mesh2.paint_uniform_color(regularColor) 
+    mesh3.paint_uniform_color(regularColor) 
 
     
     
@@ -1463,8 +1468,8 @@ def main():
     vis.add_geometry(mesh2)
     vis.add_geometry(mesh3)
 
-    vis.get_render_option().background_color = np.array([0.25, 0.25, 0.25])
-    grid = create_grid(size=15, n=20, plane='xz', color=[0.5, 0.5, 0.5])
+    vis.get_render_option().background_color = np.array(backgroundColor)
+    grid = create_grid(size=15, n=20, plane='xz', color=gridColor)
 
     # Add the grid to the visualizer
     vis.add_geometry(grid)
