@@ -432,7 +432,7 @@ def axis2arr(axis, delta, alpha):
 
 
 def smartConnect(endPoint, startPoint):
-    threshold = 0.1  # tune
+    threshold = 0.15  # tune
     if (
         abs(endPoint[0] - startPoint[0]) < threshold
         and abs(endPoint[1] - startPoint[1]) < threshold
@@ -442,7 +442,7 @@ def smartConnect(endPoint, startPoint):
         return endPoint
 
 def smartConnectBool(endPoint, startPoint):
-    threshold = 0.1  # tune
+    threshold = 0.15  # tune
     if (
         abs(endPoint[0] - startPoint[0]) < threshold
         and abs(endPoint[1] - startPoint[1]) < threshold
@@ -565,7 +565,7 @@ def parseCommand(
 
             if objectHandle == "":
                 main_window.update_mode_text("Camera")
-                handleCam(info[1:], view_control, history, vis)
+                handleCam(info[1:], view_control, history, vis, main_window)
                 return ""
             else:
                 # if (prevRotated) : snap_to_closest_plane(vis, view_control)
@@ -589,7 +589,7 @@ def parseCommand(
             deleteCount = 0
 
             
-            handleNewGeo(info[1:], view_control, camera_parameters, vis, objects_dict, ls_dict, counters)
+            handleNewGeo(info[1:], view_control, camera_parameters, vis, objects_dict, ls_dict, counters, main_window)
             return ""
         case "update":
             snapCount = 0
@@ -789,7 +789,7 @@ def rotate_object(objectHandle, axis, degrees=5):
     objectHandle.transform(transformation)
     
     
-def handleCam(subcommand, view_control, history, vis):
+def handleCam(subcommand, view_control, history, vis, main_window):
     
     global prevRotated
     global marker
@@ -821,6 +821,7 @@ def handleCam(subcommand, view_control, history, vis):
             print(history)
         case "end":
             print("ending motion")
+            main_window.update_dynamic_text("Waiting for command...")
             history["operation"] = ""
             history["axis"] = ""
             history["lastVal"] = ""
@@ -829,6 +830,7 @@ def handleCam(subcommand, view_control, history, vis):
             match history["operation"]:
                 case "pan":
                     print("camera pan update")
+                    main_window.update_dynamic_text("Panning camera")
                     splitCoords = subcommand[2].strip("()").split(",")
                     oldCoords = history["lastVal"].strip("()").split(",")
                     deltaY = (float(splitCoords[0]) - float(oldCoords[0])) * alphaM
@@ -839,6 +841,7 @@ def handleCam(subcommand, view_control, history, vis):
                     
                 case "rotate":
                     print("current axis, ", history["axis"])
+                    main_window.update_dynamic_text("Rotating camera")
                     prevRotated = True
                     print("camera rotate update")
                     delta = float(subcommand[2]) - float(history["lastVal"])
@@ -848,6 +851,7 @@ def handleCam(subcommand, view_control, history, vis):
 
                 case "zoom":
                     print("camera zoom update")
+                    main_window.update_dynamic_text("Zooming camera")
                     delta = float(subcommand[2]) - float(history["lastVal"])
                     move_camera_v2(view_control, "x", delta * alphaZ)
                     highlight_objects_near_camera(vis, view_control, objects_dict)
@@ -857,7 +861,7 @@ def handleCam(subcommand, view_control, history, vis):
             print("INVALID COMMAND")
 
 
-def handleNewGeo(subcommand, view_control, camera_parameters, vis, geometry_dir, ls_dict, counters):
+def handleNewGeo(subcommand, view_control, camera_parameters, vis, geometry_dir, ls_dict, counters, main_window):
     global view_axis
 
     alphaL = 0.002 # line scaling factor (maybe better way to do this)
@@ -891,6 +895,8 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, geometry_dir,
             camera_parameters.extrinsic = current_view_matrix
             view_control.convert_from_pinhole_camera_parameters(camera_parameters, True)
         case "line":  # line handling not fully implemented yet
+            main_window.update_dynamic_text("Drawing new line")
+
             # Store the current view matrix
             current_view_matrix = (
                 view_control.convert_to_pinhole_camera_parameters().extrinsic
@@ -967,7 +973,8 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, geometry_dir,
                 )
 
             elif subcommand[1] == "end":
-        
+                main_window.update_dynamic_text("Waiting for command...")
+
                 ls_id = "ls" + str(counters["ls"] - 1)
                 pcd_id = "pcd" + str(counters["pcd"] - 1)
                 ls = ls_dict[ls_id]
@@ -1025,7 +1032,7 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, geometry_dir,
                 vd1 = vectorDistance(prev_points[-2], new_points)
                 vd2 = vectorDistance(prev_points[-1], prev_points[-2])
                 
-                if (vd1 != 0) and (vd1 < 10*vd2 or vd2 == 0): # or (vd1 > 10*vd2 and vd2 != 0): #(vd1 > 10*vd2 or vd2 == 0):
+                if (vd1 != 0) and (vd1 < 30*vd2 or vd2 == 0):
                     add_this = o3d.utility.Vector3dVector(
                         np.array([new_points])
                     )
@@ -1071,6 +1078,7 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
         case "end":
             #print("Ending motion")
             # Reset the history after operation ends
+            main_window.update_dynamic_text("Waiting for command...")
             
             if(history["operation"] == "extrude"):   
                 objectHandle.paint_uniform_color([0.540, 0.68, 0.52])  #back to green 
@@ -1083,7 +1091,7 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                 match history["operation"]:
                     case "pan": #not actually pan, but object translation
                         #print("Updating position or transformation")
-                        main_window.update_text("translating object")
+                        main_window.update_dynamic_text("Translating object")
 
                         try:
                             coords = subcommand[2].strip("()").split(",")
@@ -1120,6 +1128,7 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                         
                         try:
                             #print("object rotation")
+                            main_window.update_dynamic_text("Rotating object")
                             delta = float(subcommand[2]) - float(history["lastVal"])
                             rotate_object(objectHandle, history["axis"], degrees=delta * alphaR)
                             rotate_object( objects_dict[object_id]['original'], history["axis"], degrees=delta * alphaR)
@@ -1152,7 +1161,7 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                                     
                                     obj_info['scale'] = new_scale
                                     formatted_text = f"Scaling factor: {new_scale:.0f}%"
-                                    main_window.update_text(formatted_text)
+                                    main_window.update_dynamic_text(formatted_text)
                                     break  
 
 
@@ -1205,6 +1214,8 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                             new_total_extrusion_y = objects_dict[object_id]['total_extrusion_y'] + abs(extrusion_distance_y)
                             print("last extrusion x ",history['last_extrusion_distance_x'])
                             print("last extrusion y ",history['last_extrusion_distance_y'])
+                            main_window.update_dynamic_text("Extruding object")
+
 
 
                                   
@@ -1229,7 +1240,7 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                             
                             if new_total_extrusion_x > 0.8:
                                 print("Maximum extrusion limit in x direction reached. No further extrusion will be performed.")
-                                main_window.update_text("Maximum extrusion limit in x direction reached. No further extrusion will be performed.")
+                                main_window.update_dynamic_text("Maximum extrusion limit in x direction reached. No further extrusion will be performed.")
                                 pass
 
                             elif abs(history['last_extrusion_distance_x']) >= 0.25:##
@@ -1244,7 +1255,7 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
 
                             if new_total_extrusion_y > 0.8:
                                 print("Maximum extrusion limit in y direction reached. No further extrusion will be performed.")
-                                main_window.update_text("Maximum extrusion limit in y direction reached. No further extrusion will be performed.")
+                                main_window.update_dynamic_text("Maximum extrusion limit in y direction reached. No further extrusion will be performed.")
                                 pass
 
 
@@ -1315,7 +1326,7 @@ def handleSelection(objects_dict, vis, main_window):
             obj.paint_uniform_color([0.540, 0.68, 0.52])  # Paint the object darker green
             vis.update_geometry(obj)
             print(f"Object {object_id} selected")
-            main_window.update_text(f"Object selected!")
+            main_window.update_dynamic_text(f"Object selected!")
 
             break  # Exit the loop once an object is marked as selected
 
@@ -1330,7 +1341,7 @@ def handleDeselection(objects_dict, vis, main_window):
             obj.paint_uniform_color([0.5, 0.5, 0.5])  # Reset the object color to grey
             vis.update_geometry(obj)
             print(f"Object {object_id} deselected")
-            main_window.update_text(f"Object {object_id} deselected")
+            main_window.update_dynamic_text(f"Object {object_id} deselected")
             
             break  # Exit the loop once an object is marked as deselected
 
@@ -1345,7 +1356,7 @@ def handle_commands(clientSocket, vis, view_control, camera_parameters, geometry
             parseCommand(command, view_control, camera_parameters, vis, geometry_dir, history, objects_dict, ls_dict, counters, main_window)
             vis.poll_events()
             vis.update_renderer()
-            main_window.update_dynamic_text(command)
+            # main_window.update_dynamic_text(command)
     except s.timeout:
         # Ignore timeout exceptions, which are expected due to non-blocking call
         pass
