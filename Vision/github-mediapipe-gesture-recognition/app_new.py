@@ -388,6 +388,8 @@ def main():
                 # print(gesture_end_command)
                 prev_left_hand_gesture_id = None
                 prev_right_hand_gesture_id = None
+                left_hand_gesture_id = None
+                right_hand_gesture_id = None
 
                 sys.stdout.write(f"\rThere is no hand in view")
                 sys.stdout.flush()
