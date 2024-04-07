@@ -731,6 +731,7 @@ def addGeometry(vis, obj, objects_dict):
     
     # Translate the object to the origin
     obj.translate(translation_vector, relative=False)
+    obj.translate(np.array([0, 0.2, 0]))
     
     # Update the object's color
     obj.paint_uniform_color([0.5, 0.5, 0.5])  # Reset the object color to grey
@@ -741,7 +742,7 @@ def addGeometry(vis, obj, objects_dict):
     # Add the new object to objects_dict with its properties
     objects_dict[object_id] = {
         'object': obj, 
-        'center': [0, 0, 0],  # Object is now at the origin
+        'center': center,  # Object is now at the origin
         'highlighted': False, 
         'selected': False, 
         'scale': 100
@@ -931,16 +932,34 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict,
             print("Creating new triangle at origin")
             # Store the current view matrix
             current_view_matrix = view_control.convert_to_pinhole_camera_parameters().extrinsic
-            # Manually define a triangle mesh
-            vertices = np.array([[0, 0, 0], [0.1, 0, 0], [0.05, 0.1, 0]])  # Triangle vertices
-            triangles = np.array([[0, 1, 2]])  # Triangle indices
+
+            # Manually define a larger triangle mesh with depth
+            scale_factor = 2  # Increase this factor to scale up the size of the triangle
+            depth = 0.1  # The depth of the triangle in the z-axis
+            vertices = np.array([
+                [0, 0, -depth/2],  # Base center back
+                [scale_factor * 0.1, 0, -depth/2],  # Base right back
+                [scale_factor * 0.05, scale_factor * 0.1, -depth/2],  # Top back
+                [0, 0, depth/2],  # Base center front
+                [scale_factor * 0.1, 0, depth/2],  # Base right front
+                [scale_factor * 0.05, scale_factor * 0.1, depth/2],  # Top front
+            ])  # Triangle vertices
+
+            # Define the triangles (faces of the 3D object)
+            triangles = np.array([
+                [0, 2, 1],  # Back face
+                [3, 4, 5],  # Front face
+                [0, 3, 5], [5, 2, 0],  # Left side faces
+                [0, 1, 4], [4, 3, 0],  # Bottom side faces
+                [1, 2, 5], [5, 4, 1],  # Right side faces
+            ])  # Triangle indices
+
             new_triangle = o3d.geometry.TriangleMesh(vertices=o3d.utility.Vector3dVector(vertices),
                                                     triangles=o3d.utility.Vector3iVector(triangles))
             new_triangle.compute_vertex_normals()
             addGeometry(vis, new_triangle, objects_dict)
-            # Restore the view matrix
 
-            
+
         case "line":  # line handling not fully implemented yet
             main_window.update_dynamic_text("Drawing new line")
 
@@ -1305,12 +1324,12 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                             #         objects_dict[object_id]['total_extrusion_x'] = 0.0
                             #         objects_dict[object_id]['total_extrusion_y'] = 0.0
                             
-                            if new_total_extrusion_x > 0.8:
+                            if new_total_extrusion_x > 1:
                                 print("Maximum extrusion limit in x direction reached. No further extrusion will be performed.")
                                 main_window.update_dynamic_text("Maximum extrusion limit in x direction reached. No further extrusion will be performed.")
                                 pass
 
-                            elif abs(history['last_extrusion_distance_x']) >= 0.25:##
+                            elif abs(history['last_extrusion_distance_x']) >= 0.20:##
                                 direction = [1,0,0]
                                 if history['last_extrusion_distance_x'] < 0:
                                     direction = [-1,0,0]
@@ -1320,19 +1339,18 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
 
                                 extrude(object_id, objectHandle, objects_dict, vis, history, direction)
 
-                            if new_total_extrusion_y > 0.8:
+                            if new_total_extrusion_y > 1:
                                 print("Maximum extrusion limit in y direction reached. No further extrusion will be performed.")
                                 main_window.update_dynamic_text("Maximum extrusion limit in y direction reached. No further extrusion will be performed.")
                                 pass
 
 
-                            elif abs(history['last_extrusion_distance_y']) >= 0.25:##
+                            elif abs(history['last_extrusion_distance_y']) >= 0.20:##
                                 objects_dict[object_id]['total_extrusion_y'] += 0.2
                                 direction = [0,1,0]
 
                                 if history['last_extrusion_distance_y'] < 0:
                                     direction = [0,-1,0]
-                                print("extruding by 0.2 in y")
 
                                 extrude(object_id, objectHandle, objects_dict, vis, history, direction)
 
@@ -1362,7 +1380,7 @@ def extrude(object_id, objectHandle, objects_dict, vis, history, direction):
 
     # Perform the extrusion
     mesh_extrusion = o3d.t.geometry.TriangleMesh.from_legacy(objectHandle)
-    extruded_shape = mesh_extrusion.extrude_linear(direction_tensor, scale=0.1)
+    extruded_shape = mesh_extrusion.extrude_linear(direction_tensor, scale=0.2)
 
     # Simplify the extruded shape before converting to legacy
     # Note: You might need to convert the tensor mesh back to a legacy mesh for simplification
@@ -1483,28 +1501,17 @@ def main():
     camera_parameters.intrinsic.set_intrinsics(
         width=width, height=height, fx=K[0][0], fy=K[1][1], cx=K[0][2], cy=K[1][2]
     )
-    o3d.t
     print("Testing mesh in Open3D...")
 
 
     mesh = o3d.geometry.TriangleMesh.create_box(width=0.2, height=0.4, depth=0.2)
     mesh.compute_vertex_normals()
-    mesh.translate(np.array([0.3, 0.5, 0.3]))
     
     
-    mesh2 = o3d.geometry.TriangleMesh.create_box(width=0.4, height=0.2, depth=0.2)
-    mesh2.compute_vertex_normals()
-    mesh2.translate(np.array([0.2, 0.2, 0.4]))
-    
-    
-    
-    
-    
-    
+
     
     
     mesh.paint_uniform_color([0.5, 0.5, 0.5]) 
-    mesh2.paint_uniform_color([0.5, 0.5, 0.5]) 
 
     
     
@@ -1518,7 +1525,6 @@ def main():
         window_name="Open3D", width=width, height=height, left=50, top=50, visible=True
     )
     vis.add_geometry(mesh)
-    vis.add_geometry(mesh2)
 
     vis.get_render_option().background_color = np.array([0.25, 0.25, 0.25])
     grid = create_grid(size=15, n=20, plane='xz', color=[0.5, 0.5, 0.5])
@@ -1533,7 +1539,6 @@ def main():
     camera.set_constant_z_far(4500)
 
     objects_dict['object_1'] = {'object': mesh, 'center': mesh.get_center(), 'highlighted' : False, 'selected' : False,  'scale' : 100}
-    objects_dict['object_2'] = {'object': mesh2, 'center': mesh2.get_center(), 'highlighted' : False, 'selected' : False, 'scale' : 100}
 
 
     ls_dict = {}
@@ -1549,11 +1554,13 @@ def main():
 
     main_window = MainWindow(vis)
     main_window.show()
+    snap_isometric(vis, view_control)
 
     # Setup a QTimer to periodically check for new commands
     timer = QtCore.QTimer()
     timer.timeout.connect(lambda: handle_commands(clientSocket, vis, view_control, camera_parameters, geometry_dir, history, objects_dict, ls_dict, counters, main_window))
     timer.start(25)  # Check every 100 milliseconds
+    
 
     sys.exit(app.exec_())
 
