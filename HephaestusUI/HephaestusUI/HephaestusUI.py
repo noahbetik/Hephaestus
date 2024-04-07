@@ -41,6 +41,7 @@ previous_look_at_point = None
 zoomFactor = 0.25
 extrusion_distance = 0
 deleteCount = 0
+selected_pkt = 0
 
 regularColor = [0.5, 0.5, 0.5]
 closestColor = [0.0, 0.482, 1.0]
@@ -511,19 +512,21 @@ def makeConnection(serverSocket):
 
 tcp_command_buffer = ""
 
-def getTCPData(sock):
+def getTCPData(sock, sketch):
     global tcp_command_buffer
+    global selected_pkt
     try:
         # Temporarily set a non-blocking mode to check for new data
         sock.setblocking(False)
         data = sock.recv(1024)  # Attempt to read more data
-        
+        packet = "ACK "+str(selected_pkt + sketch)
         if data:
         # Process received data
             print(f"Received: {data.decode('ascii').strip()}")
 
             # Send acknowledgment back
-            sock.sendall("ACK".encode("ascii"))
+            sock.sendall(packet.encode("ascii"))
+            print("send back ", packet)
         #sock.setblocking(True)  # Revert to the original blocking mode
 
         # Decode and append to buffer
@@ -577,6 +580,7 @@ def parseCommand(
     global snapCount
     global deleteCount
     global prevAdded
+    global selected_pkt
     info = command.split(" ")
     print(info)
     objectHandle = ""    
@@ -614,10 +618,12 @@ def parseCommand(
             snapCount = 0
             deleteCount = 0
             main_window.update_mode_text("Object")
+            selected_pkt = 1
             return handleSelection(objects_dict, vis, main_window)  # Assume this function handles object selection
         case "deselect":
             snapCount = 0
             deleteCount = 0
+            selected_pkt  = 0
 
             main_window.update_mode_text("Camera")
             return handleDeselection(objects_dict, vis, main_window)  # Assume this function handles object selection
@@ -1351,28 +1357,6 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                             
                             print("----------------------------- total x is ",  objects_dict[object_id]['total_extrusion_x'])
 
-
-
-                                  
-                            # if history['last_extrusion_distance_x'] <= -0.4 or history['last_extrusion_distance_y'] <= -0.4: 
-                            #     # Revert to the original state
-                            #     print("reverting to original state")
-                            #     if 'original' in objects_dict[object_id]:
-                            #         history['total_extrusion_x'] = 0
-                            #         history['total_extrusion_y'] = 0
-
-                            #         vis.remove_geometry(objectHandle, reset_bounding_box=False)
-                            #         objectHandle = clone_mesh(objects_dict[object_id]['original'])
-                            #         objectHandle.compute_vertex_normals()
-                            #         vis.add_geometry(objectHandle, reset_bounding_box=False)
-
-                            #         objects_dict[object_id]['object'] = objectHandle  # Update the current object with the original
-                            #         history['last_extrusion_distance_x'] = 0.0
-                            #         history['last_extrusion_distance_y'] = 0.0
-
-                            #         objects_dict[object_id]['total_extrusion_x'] = 0.0
-                            #         objects_dict[object_id]['total_extrusion_y'] = 0.0
-                            
                             if new_total_extrusion_x > maxLimit:
                                 print("Maximum extrusion limit in x direction reached. No further extrusion will be performed.")
                                 main_window.update_dynamic_text("Maximum extrusion limit in x direction reached. No further extrusion will be performed.")
@@ -1537,7 +1521,7 @@ def handle_commands(clientSocket, vis, view_control, camera_parameters, geometry
     try:
         # Attempt to receive data, but don't block indefinitely
         clientSocket.settimeout(0.1)  # Non-blocking with timeout
-        command = getTCPData(clientSocket)
+        command = getTCPData(clientSocket, len(ls_dict))
         if command:
             # Parse and handle the command
             parseCommand(command, view_control, camera_parameters, vis, geometry_dir, history, objects_dict, ls_dict, counters, main_window)
