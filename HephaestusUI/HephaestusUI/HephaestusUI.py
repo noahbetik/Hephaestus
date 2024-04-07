@@ -914,9 +914,6 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict,
             new_box = o3d.geometry.TriangleMesh.create_box(width=0.2, height=0.2, depth=0.2)
             new_box.compute_vertex_normals()
             addGeometry(vis, new_box, objects_dict)
-            # Restore the view matrix
-            camera_parameters.extrinsic = current_view_matrix
-            view_control.convert_from_pinhole_camera_parameters(camera_parameters, True)
 
         case "sphere":
             print("Creating new sphere at origin")
