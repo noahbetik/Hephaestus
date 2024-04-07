@@ -62,39 +62,66 @@ class Open3DVisualizerWidget(QtWidgets.QWidget):
         self.vis.destroy_window()
 
 class TextDisplayWidget(QtWidgets.QLabel):
-    def __init__(self, text="Hello World", parent=None):
+    def __init__(self, text="Welcome to Hephaestus", parent=None):
         super(TextDisplayWidget, self).__init__(parent)
-               #
-        font = QFont("Arial", 24)  
+        # Update font to a more modern one, such as "Segoe UI" and increase readability
+        font = QtGui.QFont("Roboto", 24)  
         self.setFont(font)
-
         self.setText(text)
         self.setAlignment(QtCore.Qt.AlignCenter)  # Center align the text
+        self.setStyleSheet("""
+            background-color: transparent;
+            color: white;
+        """)
 
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, vis):
         super(MainWindow, self).__init__()
         self.setWindowTitle("Open3D and Text Display in PySide6")
         self.setGeometry(100, 100, 1280, 960)
-        self.setStyleSheet("background-color: darkgray;") 
-
+        self.setStyleSheet("""
+        QMainWindow {
+            background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                              stop:0 #141414, stop:1 #141414);
+        }
+        """)
 
         # Create a central widget and set a layout for it
         central_widget = QtWidgets.QWidget(self)
         self.setCentralWidget(central_widget)
         layout = QtWidgets.QVBoxLayout(central_widget)
 
-        # Create and add the text display widget
-        self.text_display_widget = TextDisplayWidget("Hello World")
-        layout.addWidget(self.text_display_widget)  # No stretch factor necessary here
+        # Dynamically updating text widget
+        self.dynamic_text_widget = TextDisplayWidget("Waiting for command...", self)
+        # Ensure the text is centered in both the horizontal and vertical layout
+        self.dynamic_text_widget.setAlignment(QtCore.Qt.AlignCenter)  
+        # Apply custom styles for better visibility and aesthetics
+        self.dynamic_text_widget.setStyleSheet("""
+            background-color: transparent;
+            color: white;
+            font: 20pt "Roboto";
+        """)
+        layout.addWidget(self.dynamic_text_widget, 0, QtCore.Qt.AlignCenter)  # Add the widget with alignment to the center
 
         # Create and add the Open3D visualizer widget
-        self.open3d_widget = Open3DVisualizerWidget(vis)
+        self.open3d_widget = Open3DVisualizerWidget(vis, self)
         layout.addWidget(self.open3d_widget, 1)  # Add with stretch factor of 1 to take up remaining space
 
+        # Add the mode text
+        self.mode_text_widget = TextDisplayWidget("Mode: None", self)
+        self.mode_text_widget.setAlignment(QtCore.Qt.AlignCenter)  
+        self.mode_text_widget.setStyleSheet("""
+            background-color: transparent;
+            color: white;
+            font: 18pt "Roboto";  # You might opt for a slightly smaller font size
+        """)
+        # layout.addWidget(self.mode_text_widget, 0, QtCore.Qt.AlignCenter)  # Add the widget with alignment to the center
 
-    def update_text(self, new_text):
-        self.text_display_widget.setText(new_text)
+    def update_dynamic_text(self, new_text):
+        self.dynamic_text_widget.setText(new_text)
+
+    def update_mode_text(self, new_text):
+        self.mode_text_widget.setText(new_text)
 
 
 def create_grid(size=10, n=10, plane='xz', color=[0.5, 0.5, 0.5]):
@@ -1304,6 +1331,7 @@ def handle_commands(clientSocket, vis, view_control, camera_parameters, geometry
             parseCommand(command, view_control, camera_parameters, vis, geometry_dir, history, objects_dict, ls_dict, counters, main_window)
             vis.poll_events()
             vis.update_renderer()
+            main_window.update_dynamic_text(command)
     except s.timeout:
         # Ignore timeout exceptions, which are expected due to non-blocking call
         pass
