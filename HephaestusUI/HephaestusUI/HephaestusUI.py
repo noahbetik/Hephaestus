@@ -74,6 +74,8 @@ class TextDisplayWidget(QtWidgets.QLabel):
             color: white;
         """)
 
+from PySide6 import QtWidgets, QtGui, QtCore
+
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, vis):
         super(MainWindow, self).__init__()
@@ -89,39 +91,49 @@ class MainWindow(QtWidgets.QMainWindow):
         # Create a central widget and set a layout for it
         central_widget = QtWidgets.QWidget(self)
         self.setCentralWidget(central_widget)
-        layout = QtWidgets.QVBoxLayout(central_widget)
+        vertical_layout = QtWidgets.QVBoxLayout(central_widget)
 
-        # Dynamically updating text widget
+        # Horizontal layout for text alignment
+        text_layout = QtWidgets.QHBoxLayout()
+        
+        # Mode text widget, align it to the left
+        self.mode_text_widget = QtWidgets.QLabel("Mode: Camera", self)
+        self.mode_text_widget.setStyleSheet("""
+            background-color: transparent;
+            color: white;
+            font: 18pt "Roboto";
+        """)
+        text_layout.addWidget(self.mode_text_widget, alignment=QtCore.Qt.AlignLeft)
+
+        # Spacer to push dynamic text to center
+        text_layout.addStretch()
+
+        # Dynamic text widget (centered in the window)
         self.dynamic_text_widget = TextDisplayWidget("Waiting for command...", self)
-        # Ensure the text is centered in both the horizontal and vertical layout
-        self.dynamic_text_widget.setAlignment(QtCore.Qt.AlignCenter)  
-        # Apply custom styles for better visibility and aesthetics
         self.dynamic_text_widget.setStyleSheet("""
             background-color: transparent;
             color: white;
             font: 20pt "Roboto";
         """)
-        layout.addWidget(self.dynamic_text_widget, 0, QtCore.Qt.AlignCenter)  # Add the widget with alignment to the center
+        text_layout.addWidget(self.dynamic_text_widget, alignment=QtCore.Qt.AlignCenter)
+
+        # Spacer to ensure dynamic text remains centered
+        text_layout.addStretch()
+
+        # Add the horizontal layout to the main vertical layout
+        vertical_layout.addLayout(text_layout)
 
         # Create and add the Open3D visualizer widget
         self.open3d_widget = Open3DVisualizerWidget(vis, self)
-        layout.addWidget(self.open3d_widget, 1)  # Add with stretch factor of 1 to take up remaining space
+        vertical_layout.addWidget(self.open3d_widget, 1)  # Add with stretch factor of 1 to take up remaining space
 
-        # Add the mode text
-        self.mode_text_widget = TextDisplayWidget("Mode: None", self)
-        self.mode_text_widget.setAlignment(QtCore.Qt.AlignCenter)  
-        self.mode_text_widget.setStyleSheet("""
-            background-color: transparent;
-            color: white;
-            font: 18pt "Roboto";  # You might opt for a slightly smaller font size
-        """)
-        # layout.addWidget(self.mode_text_widget, 0, QtCore.Qt.AlignCenter)  # Add the widget with alignment to the center
+
 
     def update_dynamic_text(self, new_text):
         self.dynamic_text_widget.setText(new_text)
 
     def update_mode_text(self, new_text):
-        self.mode_text_widget.setText(new_text)
+        self.mode_text_widget.setText(f"Mode: {new_text}")
 
 
 def create_grid(size=10, n=10, plane='xz', color=[0.5, 0.5, 0.5]):
@@ -552,29 +564,31 @@ def parseCommand(
             snapCount=0
 
             if objectHandle == "":
+                main_window.update_mode_text("Camera")
                 handleCam(info[1:], view_control, history, vis)
                 return ""
             else:
                 # if (prevRotated) : snap_to_closest_plane(vis, view_control)
                 # prevRotated = False
+                main_window.update_mode_text("Object")
                 handleUpdateGeo(info[1:], history, objectHandle, vis, main_window, objects_dict, object_id)
                 return ""
         case "select":
             snapCount = 0
             deleteCount = 0
-
+            main_window.update_mode_text("Object")
             return handleSelection(objects_dict, vis, main_window)  # Assume this function handles object selection
         case "deselect":
             snapCount = 0
             deleteCount = 0
 
-
+            main_window.update_mode_text("Camera")
             return handleDeselection(objects_dict, vis, main_window)  # Assume this function handles object selection
         case "create":
             snapCount = 0
             deleteCount = 0
 
-
+            
             handleNewGeo(info[1:], view_control, camera_parameters, vis, objects_dict, ls_dict, counters)
             return ""
         case "update":
