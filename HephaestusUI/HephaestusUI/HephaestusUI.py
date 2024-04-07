@@ -33,7 +33,7 @@ from camera_configs import faces
 snapCount = 0
 objects_dict = {}
 curr_highlighted = False
-prevRotated = False
+prevRotated = True
 prevAdded = False
 prevSnapped = False
 marker = o3d.geometry.TriangleMesh.create_sphere(radius=0.02)
@@ -80,6 +80,8 @@ class TextDisplayWidget(QtWidgets.QLabel):
             color: white;
         """)
 
+from PySide6 import QtWidgets, QtGui, QtCore
+
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, vis):
         super(MainWindow, self).__init__()
@@ -123,6 +125,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Spacer before the button to keep the text centered
         text_layout.addStretch()
+        
+        #set visualizer
+        self.vis = vis
 
         # Button (right-aligned)
         self.action_button = QtWidgets.QPushButton('Reset', self)
@@ -139,9 +144,24 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
     def on_action_button_clicked(self):
+        global objects_dict, snapCount, curr_highlighted, prevRotated ,prevAdded, prevSnapped , extrusion_distance, deleteCount
         # This method will be called when the button is clicked
         print("Reset button pressed!")
-        # Place the code here to define what happens when the button is clicked
+        
+        snapCount = 0
+        curr_highlighted = False
+        prevRotated = True
+        prevAdded = False
+        prevSnapped = False   
+        extrusion_distance = 0
+        deleteCount = 0
+
+        for obj in objects_dict.values():
+            self.vis.remove_geometry(obj['object'], reset_bounding_box=False)
+
+        objects_dict={}
+        snap_isometric(self.vis, self.vis.get_view_control())
+        
 
     def update_dynamic_text(self, new_text):
         self.dynamic_text_widget.setText(new_text)
@@ -259,13 +279,12 @@ def snap_isometric(vis, view_control):
 
     #predefined extrinsic set for the isometric view
     target_extrinsic = np.array([
-        [0.86600324, 0.0, 0.50003839, -0.1],
-        [-0.21133220, -0.90629373, 0.36601965, 0.1],
-        [0.45318549, -0.42264841, -0.78485109, 2.0],  # Increased from 0.75 to 2.0 for zooming out
-        [0.0, 0.0, 0.0, 1.0]
+        [ 8.68542871e-01, -1.11506045e-03,  4.95612791e-01,  1.71200000e-01],
+        [-2.08451221e-01, -9.08069551e-01,  3.63259933e-01,  7.36100000e-02],
+        [ 4.49645828e-01, -4.18817916e-01, -7.88929771e-01,  1.99985850e+00],  # Your comment here
+        [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00,  1.00000000e+00]
     ])
-
-    # Execute the smooth transition to the new isometric view
+        # Execute the smooth transition to the new isometric view
     smooth_transition(vis, view_control, target_extrinsic)
     prevSnapped = False
 
@@ -628,31 +647,33 @@ def parseCommand(
             else: snap_to_closest_plane(vis, view_control)
         case "delete":
             deleteCount+=1
-            if (deleteCount>2 and objectHandle):
+            if (deleteCount>5 and objectHandle):
                 removeGeometry(vis, objectHandle, object_id)
                 deleteCount = 0
 
-    
-            elif 'original' in objects_dict[object_id] and object_id:
-                history['total_extrusion_x'] = 0
-                history['total_extrusion_y'] = 0
+        
+            try:
+                if 'original' in objects_dict[object_id] and object_id:
+                    history['total_extrusion_x'] = 0
+                    history['total_extrusion_y'] = 0
 
-                vis.remove_geometry(objectHandle, reset_bounding_box=False)
-                objectHandle = clone_mesh(objects_dict[object_id]['original'])
-                objectHandle.compute_vertex_normals()
-                objectHandle.paint_uniform_color(closestColor)  #back to green 
-                vis.add_geometry(objectHandle, reset_bounding_box=False)
-                vis.update_geometry(objectHandle)
+                    vis.remove_geometry(objectHandle, reset_bounding_box=False)
+                    objectHandle = clone_mesh(objects_dict[object_id]['original'])
+                    objectHandle.compute_vertex_normals()
+                    objectHandle.paint_uniform_color(selectedColor)  #back to green 
+                    vis.add_geometry(objectHandle, reset_bounding_box=False)
+                    vis.update_geometry(objectHandle)
 
 
-                objects_dict[object_id]['object'] = objectHandle  # Update the current object with the original
-                history['last_extrusion_distance_x'] = 0.0
-                history['last_extrusion_distance_y'] = 0.0
+                    objects_dict[object_id]['object'] = objectHandle  # Update the current object with the original
+                    history['last_extrusion_distance_x'] = 0.0
+                    history['last_extrusion_distance_y'] = 0.0
 
-                objects_dict[object_id]['total_extrusion_x'] = 0.0
-                objects_dict[object_id]['total_extrusion_y'] = 0.0
-                objects_dict[object_id]['selected'] = True
-                deleteCount = 0
+                    objects_dict[object_id]['total_extrusion_x'] = 0.0
+                    objects_dict[object_id]['total_extrusion_y'] = 0.0
+                    objects_dict[object_id]['selected'] = True
+            except KeyError:
+                pass
                 
         case _:
             history["lastVal"] = info[1:][2]
@@ -729,7 +750,7 @@ def removeGeometry(vis, obj, id):
     print("deleted object ", id)
     return
 
-def addGeometry(vis, obj, objects_dict):
+def addGeometry(vis, obj, objects_dict, objType):
     # Generate a unique object ID based on the current number of items in objects_dict
     object_id = f"object_{len(objects_dict) + 1}"
     
@@ -753,11 +774,11 @@ def addGeometry(vis, obj, objects_dict):
         'center': center,  # Object is now at the origin
         'highlighted': False, 
         'selected': False, 
-        'scale': 100
+        'scale': 100,
+        'type' : objType
     }
     
               
-import numpy as np
 
 def scale_object(objectHandle, delta, min_size=0.15, max_size=1.5):
     # Intended scale factor based on the delta
@@ -921,7 +942,7 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict,
             # Create and add the cube
             new_box = o3d.geometry.TriangleMesh.create_box(width=0.2, height=0.2, depth=0.2)
             new_box.compute_vertex_normals()
-            addGeometry(vis, new_box, objects_dict)
+            addGeometry(vis, new_box, objects_dict, "cube")
 
         case "sphere":
             print("Creating new sphere at origin")
@@ -930,7 +951,7 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict,
             # Create and add the sphere
             new_sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.1)
             new_sphere.compute_vertex_normals()
-            addGeometry(vis, new_sphere, objects_dict)
+            addGeometry(vis, new_sphere, objects_dict, "sphere")
 
 
         case "triangle":
@@ -962,7 +983,7 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict,
             new_triangle = o3d.geometry.TriangleMesh(vertices=o3d.utility.Vector3dVector(vertices),
                                                     triangles=o3d.utility.Vector3iVector(triangles))
             new_triangle.compute_vertex_normals()
-            addGeometry(vis, new_triangle, objects_dict)
+            addGeometry(vis, new_triangle, objects_dict, "triangle")
 
 
         case "line":  # line handling not fully implemented yet
@@ -1288,6 +1309,27 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                             print("delta x is ",deltaX," delta y is ", deltaY)
                             
                             
+                            factor = 1  # Default factor for scaling or other operations
+                            maxLimit = 1
+                            voxelFactor = 0.1
+                            object_type = objects_dict[object_id]['type']  # Retrieve the object type from the dictionary
+
+                            match object_type:
+                                case "cube":
+                                    factor = 0.6
+                                    maxLimit = 1.5
+                                case "sphere":
+                                    factor = 0.80
+                                    maxLimit = 0.4
+                                    voxelFactor = 0
+                                case "triangle":
+                                    factor = 0.6  
+                                    maxLimit = 1.5
+                                case _:  # Default case if none of the above match
+                                    factor = 1
+                                    maxLimit = 1
+                            print("factor set to ", factor, " max limie set to ",maxLimit)
+                                                    
                             extrusion_distance_x = deltaX
                             extrusion_distance_y = deltaY
                             history['last_extrusion_distance_x'] += deltaX
@@ -1306,6 +1348,8 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                             print("last extrusion x ",history['last_extrusion_distance_x'])
                             print("last extrusion y ",history['last_extrusion_distance_y'])
                             main_window.update_dynamic_text("Extruding object")
+                            
+                            print("----------------------------- total x is ",  objects_dict[object_id]['total_extrusion_x'])
 
 
 
@@ -1329,7 +1373,7 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                             #         objects_dict[object_id]['total_extrusion_x'] = 0.0
                             #         objects_dict[object_id]['total_extrusion_y'] = 0.0
                             
-                            if new_total_extrusion_x > 1:
+                            if new_total_extrusion_x > maxLimit:
                                 print("Maximum extrusion limit in x direction reached. No further extrusion will be performed.")
                                 main_window.update_dynamic_text("Maximum extrusion limit in x direction reached. No further extrusion will be performed.")
                                 pass
@@ -1339,25 +1383,25 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                                 if history['last_extrusion_distance_x'] < 0:
                                     direction = [-1,0,0]
 
-                                objects_dict[object_id]['total_extrusion_x'] += 0.2
+                                objects_dict[object_id]['total_extrusion_x'] += 0.1
                                 print("extruding by 0.2 in x")
 
-                                extrude(object_id, objectHandle, objects_dict, vis, history, direction)
-
-                            if new_total_extrusion_y > 1:
+                                objectHandle = custom_extrude(object_id, objectHandle, direction, 0.1, vis, history, factor, voxelFactor)
+                                
+                            if new_total_extrusion_y > maxLimit:
                                 print("Maximum extrusion limit in y direction reached. No further extrusion will be performed.")
                                 main_window.update_dynamic_text("Maximum extrusion limit in y direction reached. No further extrusion will be performed.")
                                 pass
 
 
                             elif abs(history['last_extrusion_distance_y']) >= 0.20:##
-                                objects_dict[object_id]['total_extrusion_y'] += 0.2
+                                objects_dict[object_id]['total_extrusion_y'] += 0.1
                                 direction = [0,1,0]
 
                                 if history['last_extrusion_distance_y'] < 0:
                                     direction = [0,-1,0]
 
-                                extrude(object_id, objectHandle, objects_dict, vis, history, direction)
+                                objectHandle = custom_extrude(object_id, objectHandle, direction, 0.1, vis, history, factor, voxelFactor)
 
                                 #delta = deltaY
                             print("extrusion direction set to ", direction)
@@ -1372,6 +1416,62 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
 
 
 
+def custom_extrude(object_id, objectHandle, direction, distance, vis, history, factor, voxelFactor):
+    vis.remove_geometry(objectHandle, reset_bounding_box=False)
+
+    #Save the original state if not saved yet
+    if 'original' not in objects_dict[object_id]:
+        objects_dict[object_id]['original'] = clone_mesh(objectHandle)
+
+    # Get vertices and faces from the original mesh
+    vertices = np.asarray(objectHandle.vertices)
+    faces = np.asarray(objectHandle.triangles)
+    
+    # Calculate new vertices by adding the extrusion direction and distance to the original vertices
+    new_vertices = vertices + np.array(direction) * distance
+    
+    # Create faces for the sides of the extrusion. This assumes a closed, watertight mesh
+    side_faces = []
+    for edge in objectHandle.get_non_manifold_edges():
+        v1, v2 = edge
+        # Create two triangles for each edge to form a quadrilateral side face
+        new_face_1 = [v1, v2, v2 + len(vertices)]
+        new_face_2 = [v1, v2 + len(vertices), v1 + len(vertices)]
+        side_faces.append(new_face_1)
+        side_faces.append(new_face_2)
+    
+    # Combine original and new vertices and faces
+    all_vertices = np.vstack((vertices, new_vertices))
+    all_faces = np.vstack((faces, faces + len(vertices)))
+    
+    # Check if side_faces is not empty before concatenating
+    if side_faces:
+        all_faces = np.vstack((all_faces, side_faces))
+
+    # Create a new mesh with the combined data
+    extruded_mesh = o3d.geometry.TriangleMesh(
+        vertices=o3d.utility.Vector3dVector(all_vertices),
+        triangles=o3d.utility.Vector3iVector(all_faces)
+    )
+    
+    
+    current_triangle_count = len(extruded_mesh.triangles)
+    print("--------------------------------------------------------Current triangle count ",current_triangle_count)
+    # Recompute normals for the new mesh
+    
+    
+    simplified_mesh = extruded_mesh.simplify_quadric_decimation(target_number_of_triangles=round(current_triangle_count* factor))
+    if voxelFactor > 0:
+         simplified_mesh = extruded_mesh.simplify_vertex_clustering(voxel_size = voxelFactor)
+
+    simplified_mesh.compute_vertex_normals()
+    history['last_extrusion_distance_x'] = 0.0
+    history['last_extrusion_distance_y'] = 0.0
+    
+    # Update the visualizer and object dictionary
+    vis.add_geometry(simplified_mesh, reset_bounding_box=False)
+    objects_dict[object_id]['object'] =  simplified_mesh
+    return extruded_mesh
 
 
 def extrude(object_id, objectHandle, objects_dict, vis, history, direction):
@@ -1543,7 +1643,7 @@ def main():
     camera = vis.get_view_control()
     camera.set_constant_z_far(4500)
 
-    objects_dict['object_1'] = {'object': mesh, 'center': mesh.get_center(), 'highlighted' : False, 'selected' : False,  'scale' : 100}
+    objects_dict['object_1'] = {'object': mesh, 'center': mesh.get_center(), 'highlighted' : False, 'selected' : False,  'scale' : 100, 'type': "cube"}
 
 
     ls_dict = {}
