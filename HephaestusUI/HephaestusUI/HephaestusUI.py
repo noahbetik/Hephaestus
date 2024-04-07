@@ -80,8 +80,6 @@ class TextDisplayWidget(QtWidgets.QLabel):
             color: white;
         """)
 
-from PySide6 import QtWidgets, QtGui, QtCore
-
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, vis):
         super(MainWindow, self).__init__()
@@ -99,9 +97,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setCentralWidget(central_widget)
         vertical_layout = QtWidgets.QVBoxLayout(central_widget)
 
-        # Horizontal layout for text alignment
+        # Horizontal layout for text and button
         text_layout = QtWidgets.QHBoxLayout()
-        
+
         # Mode text widget, align it to the left
         self.mode_text_widget = QtWidgets.QLabel("Mode: Camera", self)
         self.mode_text_widget.setStyleSheet("""
@@ -123,17 +121,27 @@ class MainWindow(QtWidgets.QMainWindow):
         """)
         text_layout.addWidget(self.dynamic_text_widget, alignment=QtCore.Qt.AlignCenter)
 
-        # Spacer to ensure dynamic text remains centered
+        # Spacer before the button to keep the text centered
         text_layout.addStretch()
+
+        # Button (right-aligned)
+        self.action_button = QtWidgets.QPushButton('Reset', self)
+        self.action_button.setStyleSheet("font: 18pt 'Roboto';")
+        text_layout.addWidget(self.action_button, alignment=QtCore.Qt.AlignRight)
+        self.action_button.clicked.connect(self.on_action_button_clicked)
 
         # Add the horizontal layout to the main vertical layout
         vertical_layout.addLayout(text_layout)
 
         # Create and add the Open3D visualizer widget
         self.open3d_widget = Open3DVisualizerWidget(vis, self)
-        vertical_layout.addWidget(self.open3d_widget, 1)  # Add with stretch factor of 1 to take up remaining space
+        vertical_layout.addWidget(self.open3d_widget, 1)
 
 
+    def on_action_button_clicked(self):
+        # This method will be called when the button is clicked
+        print("Reset button pressed!")
+        # Place the code here to define what happens when the button is clicked
 
     def update_dynamic_text(self, new_text):
         self.dynamic_text_widget.setText(new_text)
