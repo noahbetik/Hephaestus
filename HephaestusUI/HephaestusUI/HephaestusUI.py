@@ -31,7 +31,6 @@ from camera_configs import faces
 # HELPER FUNCTIONS
 # ----------------------------------------------------------------------------------------
 
-snapCount = 0
 objects_dict = {}
 ls_dict = {}
 curr_highlighted = False
@@ -150,8 +149,6 @@ class MainWindow(QtWidgets.QMainWindow):
         global objects_dict, ls_dict, snapCount, curr_highlighted, prevRotated ,prevAdded, prevSnapped , extrusion_distance, deleteCount
         # This method will be called when the button is clicked
         print("Reset button pressed!")
-        
-        snapCount = 0
         curr_highlighted = False
         prevRotated = True
         prevAdded = False
@@ -586,7 +583,6 @@ def parseCommand(
     # [command] [subcommand]
 
     global prevRotated
-    global snapCount
     global deleteCount
     global prevAdded
     global selected_pkt
@@ -606,7 +602,6 @@ def parseCommand(
 
     match info[0]:
         case "motion":
-            snapCount=0
             
             #print("**************************** ", info[1:][0])
 
@@ -618,46 +613,44 @@ def parseCommand(
                 # if (prevRotated) : snap_to_closest_plane(vis, view_control)
                 # prevRotated = False
                 main_window.update_mode_text("Object")
-                handleUpdateGeo(info[1:], history, objectHandle, vis, main_window, objects_dict, object_id)
+                handleUpdateGeo(info[1:], history, objectHandle, vis, main_window, objects_dict, object_id, ls_dict)
                 return ""
         case "select":
             prevAdded = False
-            snapCount = 0
             deleteCount = 0
             main_window.update_mode_text("Object")
             selected_pkt = 1
             return handleSelection(objects_dict, vis, main_window)  # Assume this function handles object selection
         case "deselect":
-            snapCount = 0
             deleteCount = 0
             selected_pkt  = 0
 
             main_window.update_mode_text("Camera")
             return handleDeselection(objects_dict, vis, main_window)  # Assume this function handles object selection
         case "create":
-            snapCount = 0
             deleteCount = 0
             if not prevAdded:
                 handleNewGeo(info[1:], view_control, camera_parameters, vis, objects_dict, counters, main_window)
+                handleDeselection(objects_dict, vis, main_window)
                 #prevAdded = True
             return ""
         case "update":
-            snapCount = 0
             deleteCount = 0
 
 
             # if objectHandle:
             #     if (prevRotated) : snap_to_closest_plane(vis, view_control)
             #     prevRotated = False
-            handleUpdateGeo(info[1:], history, objectHandle, vis, main_window, objects_dict, object_id)
+            handleUpdateGeo(info[1:], history, objectHandle, vis, main_window, objects_dict, object_id, ls_dict)
             
-        case "home":
-            snap_isometric(vis, view_control)
+
         case "snap":
-            snapCount+=1
-            if (snapCount>3):
+            if info[1:][0] == "iso":
                 snap_isometric(vis, view_control)
-            else: snap_to_closest_plane(vis, view_control)
+            elif info[1:][0] == "home":
+                snap_to_closest_plane(vis, view_control)
+ 
+            
         case "delete":
             deleteCount+=1
             if (deleteCount>5 and objectHandle):
@@ -793,7 +786,7 @@ def addGeometry(vis, obj, objects_dict, objType):
     
               
 
-def scale_object(objectHandle, delta, min_size=0.15, max_size=1.5):
+def scale_object(objectHandle, delta, min_size=0.01, max_size=1.5):
     # Intended scale factor based on the delta
     scaleFactor = 1 + delta
     
@@ -850,6 +843,13 @@ def rotate_object(objectHandle, axis, degrees=5):
             [np.cos(angle), 0, np.sin(angle), 0],
             [0, 1, 0, 0],
             [-np.sin(angle), 0, np.cos(angle), 0],
+            [0, 0, 0, 1]
+        ])
+    elif axis == "z":
+        rotation_matrix = np.array([
+            [np.cos(angle), -np.sin(angle), 0, 0],
+            [np.sin(angle), np.cos(angle), 0, 0],
+            [0, 0, 1, 0],
             [0, 0, 0, 1]
         ])
     else:
@@ -946,7 +946,7 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict,
     global ls_dict
 
     alphaL = 0.002 # line scaling factor (maybe better way to do this)
-    #print("***********subcommand[0] ", subcommand[0])
+    print("***********subcommand[0] ", subcommand[0])
     
 
     match subcommand[0]:
@@ -1014,6 +1014,14 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict,
             #print("**********SUBCOMMAND IS ",subcommand[1])
 
             if subcommand[1] == "start":
+          
+
+                smooth_transition(vis, view_control, np.array([
+                [ 9.99986618e-01, -1.10921734e-03,  5.05311841e-03, -1.28562713e+00],
+                [-1.13032407e-03, -9.99990642e-01,  4.17603074e-03,  4.10222709e-01],
+                [ 5.04843899e-03, -4.18168652e-03, -9.99978513e-01,  2.46971612e+00],  # Your comment here
+                [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00,  1.00000000e+00]
+            ]))
 
                 closest_plane = predefined_extrinsics[closest_config(current_view_matrix)]
                 view_axis = identify_plane(closest_plane) # global var
@@ -1170,7 +1178,7 @@ def clone_mesh(mesh):
     # If you have other attributes like texture coordinates, you'll need to copy them as well
     return cloned_mesh
 
-def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects_dict, object_id):
+def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects_dict, object_id, ls_dict):
     alphaM = 0.01  # Translation scaling factor
     alphaR = 1  # Rotation scaling factor (in radians for Open3D)
     alphaS = 100  # Scaling scaling factor
@@ -1221,6 +1229,8 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                         main_window.update_dynamic_text("Translating object")
 
                         try:
+                   
+                            
                             coords = subcommand[2].strip("()").split(",")
                             currentX = float(coords[0])
                             currentY = float(coords[1])
@@ -1249,7 +1259,7 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                                 objects_dict[object_id]['center'] = objectHandle.get_center()
                                 if 'original' in objects_dict[object_id]:
                                     objects_dict[object_id]['original'].translate(world_space_translation, relative=True)
-
+      
                             #print("Translating object by", world_space_translation)
                             
                             history["lastX"] = currentX
@@ -1304,9 +1314,9 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                             else:
                                 #print("No object is currently selected.")
                                 pass
-
-                            scale_object(objectHandle, delta/alphaS)       
-                            scale_object(objects_dict[object_id]['original'], delta/alphaS)                
+                            min_size = 0.05                            
+                            scale_object(objectHandle, delta/alphaS, min_size)
+                            scale_object(objects_dict[object_id]['original'], delta/alphaS, min_size)                
 
                         except Exception as e:
                             print(f"Error processing numerical values from command: {e}")
@@ -1314,6 +1324,11 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                                 
                     case "extrude":
                         try:
+                            
+                            # if object_id != "" and len(ls_dict) == 1:
+                            #     #extrude the 2d shape
+                                
+                                
                             
                             coords = subcommand[2].strip("()").split(",")
                             currentX = float(coords[0])
