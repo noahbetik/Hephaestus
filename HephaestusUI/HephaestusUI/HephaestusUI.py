@@ -484,11 +484,9 @@ def move_camera_v3(view_control, vals, threshold=0.015):
 def rotate_camera(view_control, axis, degrees=5):
     global zoomFactor
     
-    
-    
-  
-    #else:
-        #zoomFactor *= (1 + 0.05)  # Slightly increase for "zooming in"
+    angle = np.radians(degrees)
+    if abs(angle) < 0.01:
+        return
 
     cam_params = view_control.convert_to_pinhole_camera_parameters()
     R = cam_params.extrinsic[:3, :3]
@@ -601,6 +599,7 @@ def getTCPData(sock, sketch):
             sock.sendall("RST".encode("ascii"))
             print("sent RST bit via TCP! rst = ", rst_bit)
             rst_bit = 0
+        
         if selected_pkt == 1 and curr_pkt == 0:
             sock.sendall("SEL".encode("ascii"))
             print("sent SEL bit via TCP! pkt = ", selected_pkt)
@@ -612,14 +611,20 @@ def getTCPData(sock, sketch):
 
         
         sock.setblocking(False)
+        
+        packet = "ACK"
+        sock.sendall(packet.encode("ascii"))
+        print("sent back ", packet)
         data = sock.recv(1024)  # Attempt to read more data
-        packet = "ACK "+str(selected_pkt + sketch)
+      
+
+
         if data:
         # Process received data
-            #print(f"Received: {data.decode('ascii').strip()}")
+            print(f"Received: {data.decode('ascii').strip()}")
 
             # Send acknowledgment back
-            sock.sendall(packet.encode("ascii"))
+           # sock.sendall(packet.encode("ascii"))
             #print("sent back ", packet)
         #sock.setblocking(True)  # Revert to the original blocking mode
 
@@ -799,7 +804,7 @@ def parseCommand(
         if obj_info.get('selected', False):  # Check if the 'selected' key exists and is True
             objectHandle = obj_info['object']  # Now, objectHandle directly references the mesh object
             object_id = id
-            print(f"Selected object: {id}")
+           #print(f"Selected object: {id}")
             break  # Assume only one object can be selected at a time; break after finding the first selected object
 
 
@@ -818,6 +823,7 @@ def parseCommand(
                 # prevRotated = False
                 main_window.update_mode_text("Object")
                 handleUpdateGeo(info[1:], history, objectHandle, vis, main_window, objects_dict, object_id, ls_dict)
+                objectHandle.paint_uniform_color(selectedColor)  #back to green 
                 return ""
         case "select":
             if len(ls_dict) == 2:
@@ -1051,6 +1057,8 @@ def scale_object(objectHandle, delta, min_size=0.01, max_size=1.5):
 def rotate_object(objectHandle, axis, degrees=5):
     # Calculate the rotation angle in radians
     angle = np.radians(degrees)
+    if abs(angle) < 0.02:
+        return
     
     # Compute the object's center
     center = objectHandle.get_center()
@@ -1125,7 +1133,7 @@ def handleCam(subcommand, view_control, history, vis, main_window):
             else:
                 history["axis"] = subcommand[2]
                 history["lastVal"] = subcommand[3]
-            print(history)
+           # print(history)
         case "end":
             print("ending motion")
             main_window.update_dynamic_text("Waiting for command...")
@@ -1174,7 +1182,7 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict,
     global ls_dict
 
     alphaL = 0.002 # line scaling factor (maybe better way to do this)
-    print("***********subcommand[0] ", subcommand[0])
+    #print("***********subcommand[0] ", subcommand[0])
     
 
     match subcommand[0]:
@@ -1327,8 +1335,8 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict,
                 print("Ending line")
                 # threshold for connecting closed-loop geometry
                 all_points = np.asarray(pcd.points).tolist()
-                print(pcd.points)
-                print(all_points)
+                #print(pcd.points)
+               # print(all_points)
                 if smartConnectBool(all_points[-1], all_points[0]):
                     print("CONNECTY WECTY")
                     ls.lines.extend(o3d.utility.Vector2iVector(np.array([[len(pcd.points), 0]])))
@@ -1417,6 +1425,7 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
     
     global extrusion_distance
     global prevRotated
+    global rst_bit
 
     match subcommand[1]:
         case "start":
@@ -1426,7 +1435,7 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
             history["lastVal"] = subcommand[3] if len(subcommand) > 3 else None  # Starting value, if applicable
             
             
-            print("subcommand is, ",subcommand[0], " and prevRotated is ",prevRotated)
+            #print("subcommand is, ",subcommand[0], " and prevRotated is ",prevRotated)
             if (subcommand[0] == "extrude" and prevRotated):
                 view_control = vis.get_view_control()
                 cam_params = view_control.convert_to_pinhole_camera_parameters()
@@ -1457,8 +1466,6 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                         main_window.update_dynamic_text("Translating object")
 
                         try:
-                   
-                            
                             coords = subcommand[2].strip("()").split(",")
                             currentX = float(coords[0])
                             currentY = float(coords[1])
@@ -1555,9 +1562,14 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                             
                             # if object_id != "" and len(ls_dict) == 1:
                             #     #extrude the 2d shape
-                                
-                                
+                            current_triangle_count = len(objectHandle.triangles)
                             
+                            if (current_triangle_count > 60000):
+                                    main_window.update_dynamic_text("This object is too big to extrude")
+                                    rst_bit = 1
+                                    return
+                                
+
                             coords = subcommand[2].strip("()").split(",")
                             currentX = float(coords[0])
                             currentY = float(coords[1])
@@ -1586,14 +1598,14 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                                     maxLimit = 1.5
                                 case "sphere":
                                     factor = 0.80
-                                    maxLimit = 0.4
+                                    maxLimit = 0.8
                                     voxelFactor = 0
                                 case "triangle":
                                     factor = 0.5  
                                     maxLimit = 1.5
                                 case "sketch":
                                     factor = 0.4  
-                                    maxLimit = 0.5
+                                    maxLimit = 1
                                     voxelFactor = 0.007
                                 case _:  # Default case if none of the above match
                                     factor = 1
@@ -1622,7 +1634,7 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                             print("----------------------------- total x is ",  objects_dict[object_id]['total_extrusion_x'])
 
                             if new_total_extrusion_x > maxLimit:
-                                print("Maximum extrusion limit in x direction reached. No further extrusion will be performed.")
+                                print("Maximum extrusion limit reached. No further extrusion will be performed.")
                                 main_window.update_dynamic_text("Maximum extrusion limit in x direction reached. No further extrusion will be performed.")
                                 pass
 
@@ -1637,7 +1649,7 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                                 objectHandle = custom_extrude(object_id, objectHandle, direction, 0.1, vis, history, factor, voxelFactor)
                                 
                             if new_total_extrusion_y > maxLimit:
-                                print("Maximum extrusion limit in y direction reached. No further extrusion will be performed.")
+                                print("Maximum extrusion limit reached. No further extrusion will be performed.")
                                 main_window.update_dynamic_text("Maximum extrusion limit in y direction reached. No further extrusion will be performed.")
                                 pass
 
@@ -1648,6 +1660,8 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
 
                                 if history['last_extrusion_distance_y'] < 0:
                                     direction = [0,-1,0]
+                                    
+                                    
 
                                 objectHandle = custom_extrude(object_id, objectHandle, direction, 0.1, vis, history, factor, voxelFactor)
 
@@ -1704,6 +1718,7 @@ def custom_extrude(object_id, objectHandle, direction, distance, vis, history, f
     
     
     current_triangle_count = len(extruded_mesh.triangles)
+    
     print("--------------------------------------------------------Current triangle count ",current_triangle_count)
     # Recompute normals for the new mesh
     
@@ -1782,6 +1797,7 @@ def handleDeselection(objects_dict, vis, main_window):
 
 def handle_commands(clientSocket, vis, view_control, camera_parameters, geometry_dir, history, objects_dict, counters, main_window):
     try:
+        #print("running")
         # Attempt to receive data, but don't block indefinitely
         clientSocket.settimeout(0.1)  # Non-blocking with timeout
         command = getTCPData(clientSocket, len(ls_dict))

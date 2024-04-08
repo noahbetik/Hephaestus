@@ -163,34 +163,20 @@ def main():
     # state_machine = StateMachine()
     while True:
 
-        try:
-            # Check for incoming data with no blocking
-            ready = select.select([tcp_communication.connection], [], [], 0)
+        if tcp_communication.sel:
+            extrude_allowed = True
+        
+        elif tcp_communication.desel:
+            extrude_allowed = False
+        
+        if tcp_communication.rst:
+            state_machine = 3
+            tcp_communication.rst = 0
+            print("Resetting state machine")
+            continue
+        # else:
+            # print("Unknown or malformed packet:", data)S
 
-            if ready[0]:
-                # Data is available to be read
-                data = tcp_communication.connection.recv(1024).decode("ascii")
-                print("********************receiving:", data.strip())
-
-                if data.strip() == "SEL":
-                    print("SELECTION RECEIVED")
-                    extrude_allowed = True
-                
-                if data.strip() == "DESEL":
-                    print("DESELECTION RECEIVED")
-                    extrude_allowed = False
-                
-                if data.strip() == "RST":
-                    state_machine = 3
-                    print("Resetting state machine")
-                    continue  # Proceed with the next iteration of the loop
-                # else:
-                    # print("Unknown or malformed packet:", data)S
-            else:
-                # No data available, non-blocking mode, just pass
-                pass
-        except:
-            print("The first try-except failed.")
         try:
             camera.calculate_fps()  # Calculate camera FPS, stored in camera.fps
 
@@ -410,6 +396,7 @@ def main():
                     # print(gesture_active_command)
                 ## END STAGE ##################################################################
                 elif state_machine == 3:  # End
+                    print("----------------------------------------------------- reached state 3")
                     state_machine = 0
                     gesture_end_command = f"{gesture_type} {gesture_subtype} end"
                     tcp_communication.send_command(gesture_end_command)
