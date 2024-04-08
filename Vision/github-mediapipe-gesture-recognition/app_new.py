@@ -152,7 +152,7 @@ def main():
     view = "home"
     object = "cube"
     extrude_allowed = False
-
+    ack_value = None
     gesture_types = load_gesture_definitions("./tcp/gestures.json")
 
     # Initialize classes
@@ -162,6 +162,7 @@ def main():
     tcp_communication = TCPCommunication(gesture_processing)
     # state_machine = StateMachine()
     while True:
+
         try:
             # Check for incoming data with no blocking
             ready = select.select([tcp_communication.connection], [], [], 0)
@@ -169,24 +170,34 @@ def main():
             if ready[0]:
                 # Data is available to be read
                 data = tcp_communication.connection.recv(1024).decode("ascii")
+                print("********************receiving:", data.strip())
+
+
+                # if data.startswith("ACK"):
+                #     # Split the data and check the ACK value
+                #     print(data)
+                #     ack_value = data.split(" ")[1].strip()
+                #     print(f"ack_value: {ack_value}")
+                #     if ack_value == "0":
+                #         extrude_allowed = False
+                #         print("Extrude not allowed")
+                #     else:
+                #         try:
+                #             num = int(ack_value)
+                #             if num >= 1:
+                #                 extrude_allowed = True
+                #                 # print("Extrude allowed")
+                #         except ValueError:
+                #             print("Invalid ACK number:", ack_value)
+                if data.strip() == "SEL":
+                    print("SELECTION RECEIVED")
+                    extrude_allowed = True
                 
-                if data.startswith("ACK"):
-                    # Split the data and check the ACK value
-                    print(data)
-                    ack_value = data.split(" ")[1].strip()
-                    print(f"ack_value: {ack_value}")
-                    if ack_value == "0":
-                        extrude_allowed = False
-                        print("Extrude not allowed")
-                    else:
-                        try:
-                            num = int(ack_value)
-                            if num >= 1:
-                                extrude_allowed = True
-                                # print("Extrude allowed")
-                        except ValueError:
-                            print("Invalid ACK number:", ack_value)
-                elif data.strip() == "RST":
+                if data.strip() == "DESEL":
+                    print("DESELECTION RECEIVED")
+                    extrude_allowed = False
+                
+                if data.strip() == "RST":
                     state_machine = 3
                     print("Resetting state machine")
                     continue  # Proceed with the next iteration of the loop
