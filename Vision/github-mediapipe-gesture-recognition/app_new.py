@@ -436,8 +436,8 @@ def main():
                 frame_counter = 0
                 frame_threshold = 8
 
-                sys.stdout.write(f"\rThere is no hand in view")
-                sys.stdout.flush()
+                #sys.stdout.write(f"\rThere is no hand in view")
+                #sys.stdout.flush()
 
             cv.imshow("Hand Gesture Recognition", camera.debug_image)
             left_hand_gesture_id = None
