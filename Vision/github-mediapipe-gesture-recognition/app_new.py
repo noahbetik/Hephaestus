@@ -6,6 +6,7 @@ import json
 import os
 import socket
 import time
+import select
 import sys
 import cv2 as cv
 import numpy as np
@@ -150,7 +151,8 @@ def main():
     axis = "x"
     view = "home"
     object = "cube"
-
+    extrude_allowed = False
+    ack_value = None
     gesture_types = load_gesture_definitions("./tcp/gestures.json")
 
     # Initialize classes
@@ -160,6 +162,35 @@ def main():
     tcp_communication = TCPCommunication(gesture_processing)
     # state_machine = StateMachine()
     while True:
+
+        try:
+            # Check for incoming data with no blocking
+            ready = select.select([tcp_communication.connection], [], [], 0)
+
+            if ready[0]:
+                # Data is available to be read
+                data = tcp_communication.connection.recv(1024).decode("ascii")
+                print("********************receiving:", data.strip())
+
+                if data.strip() == "SEL":
+                    print("SELECTION RECEIVED")
+                    extrude_allowed = True
+                
+                if data.strip() == "DESEL":
+                    print("DESELECTION RECEIVED")
+                    extrude_allowed = False
+                
+                if data.strip() == "RST":
+                    state_machine = 3
+                    print("Resetting state machine")
+                    continue  # Proceed with the next iteration of the loop
+                # else:
+                    # print("Unknown or malformed packet:", data)S
+            else:
+                # No data available, non-blocking mode, just pass
+                pass
+        except:
+            print("The first try-except failed.")
         try:
             camera.calculate_fps()  # Calculate camera FPS, stored in camera.fps
 
@@ -290,7 +321,7 @@ def main():
                             f"\rGesture: {gesture_name}, Frames: {frame_counter}, Confidence: {confidence:.5f}"
                         )
                         sys.stdout.flush()
-                        if frame_counter >= frame_threshold:
+                        if (frame_counter >= frame_threshold and  ((extrude_allowed and right_hand_gesture_id == 12) or (right_hand_gesture_id != 12))):
                             frame_counter = 0
                             gesture_type = gesture_types[
                                 gesture_list[right_hand_gesture_id]
@@ -298,7 +329,7 @@ def main():
                             gesture_subtype = gesture_types[
                                 gesture_list[right_hand_gesture_id]
                             ]["subtype"]
-
+                        
                             match left_hand_gesture_id:
                                 case 1:  # 1 finger
                                     axis = "x"
