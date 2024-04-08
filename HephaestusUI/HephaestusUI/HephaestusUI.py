@@ -87,8 +87,6 @@ class TextDisplayWidget(QtWidgets.QLabel):
             color: white;
         """)
 
-from PySide6 import QtWidgets, QtGui, QtCore
-
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, vis):
         super(MainWindow, self).__init__()
@@ -149,6 +147,33 @@ class MainWindow(QtWidgets.QMainWindow):
         self.open3d_widget = Open3DVisualizerWidget(vis, self)
         vertical_layout.addWidget(self.open3d_widget, 1)
 
+        self.progress_bar = QtWidgets.QProgressBar(self)
+        self.progress_bar.setMaximum(8)  # Set the maximum value to 20
+        self.progress_bar.setStyleSheet("""
+                                        
+        QProgressBar {
+            border: 2px solid #505050; /* Darker border */
+            border-radius: 5px;
+            text-align: right; /* Aligns text to the right - note this won't move the text out of the bar */
+            background-color: #333333; /* Dark background */
+            color: #FFFFFF; /* Light text color */
+            min-height: 10px; /* Makes the progress bar thinner */
+            max-height: 10px; /* Ensures the height does not exceed this value */
+
+        }
+
+        QProgressBar::chunk {
+            background-color: #32CD32; /* Green */
+            border-radius: 4px; /* Optional: Matches the bar's border-radius for consistency */
+        }
+    """)
+
+        vertical_layout.addWidget(self.progress_bar)
+
+    def update_progress(self, value):
+        #Update the progress bar with the new value
+        self.progress_bar.setValue(value)
+
 
     def on_action_button_clicked(self):
         global objects_dict, ls_dict, snapCount, curr_highlighted, prevRotated ,prevAdded, prevSnapped , extrusion_distance, deleteCount, rst_bit
@@ -174,6 +199,7 @@ class MainWindow(QtWidgets.QMainWindow):
         ls_dict = {}
 
         snap_isometric(self.vis, self.vis.get_view_control())
+        self.update_progress(0)
         
         
 
@@ -821,7 +847,8 @@ def parseCommand(
                     objects_dict[object_id]['selected'] = True
             except KeyError:
                 pass
-                
+        case "lock-in":
+            main_window.update_progress(int(info[1]))
         case _:
             history["lastVal"] = info[1:][2]
 

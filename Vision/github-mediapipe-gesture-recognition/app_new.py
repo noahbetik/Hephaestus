@@ -307,6 +307,8 @@ def main():
                                 )
                                 continue
                         frame_counter += 1
+                        tcp_communication.send_command(f"lock-in {frame_counter}")
+
 
                         # Set gesture_name
                         gesture_name = (
@@ -409,6 +411,8 @@ def main():
                     state_machine = 0
                     gesture_end_command = f"{gesture_type} {gesture_subtype} end"
                     tcp_communication.send_command(gesture_end_command)
+                    if (frame_counter != 0):
+                        tcp_communication.send_command(f"lock-in {frame_counter}")
 
                 camera.draw_bounding_rect(gesture_model.brect)
                 camera.debug_image = camera.draw_landmarks(
@@ -426,6 +430,9 @@ def main():
                 )
             ## NOTHING STAGE ###################################
             else:
+                if(frame_counter > 0):
+                    tcp_communication.send_command(f"lock-in 0")
+
                 if right_hand_gesture_id:
                     if state_machine != 0 and not (
                         gesture_types[gesture_list[right_hand_gesture_id]]["action"]
@@ -439,6 +446,7 @@ def main():
                 prev_right_hand_gesture_id = None
                 left_hand_gesture_id = None
                 right_hand_gesture_id = None
+                frame_counter = 0
 
                 sys.stdout.write(f"\rThere is no hand in view")
                 sys.stdout.flush()
