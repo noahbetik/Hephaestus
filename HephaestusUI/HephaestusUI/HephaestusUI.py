@@ -680,18 +680,12 @@ def sketchExtrude(counters, vis):
     points = points + points2 + stacked + totalScaled
     pcd.points = o3d.utility.Vector3dVector(np.array(points))
     vis.update_geometry(pcd)
-        
-    #pcd.points.extend(o3d.utility.Vector3dVector(np.array(totalScaled)))
-    #vis.update_geometry(pcd)
- 
 
-    #pcd.points = o3d.utility.Vector3dVector(points)
     print("all points done")
     distances = pcd.compute_nearest_neighbor_distance()
     avg_dist = np.mean(distances)
     pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.05, max_nn=50))
     pcd.orient_normals_consistent_tangent_plane(k=40)
-
 
     # Poisson surface reconstruction
     with o3d.utility.VerbosityContextManager(o3d.utility.VerbosityLevel.Debug) as cm:
@@ -909,19 +903,26 @@ def addGeometry(vis, obj, objects_dict, objType, wasSpawned):
     
     # Compute the center of the object for translation to the origin
     center = obj.get_center()
+
+    # Update the object's color
+    obj.paint_uniform_color([0.5, 0.5, 0.5])  # Reset the object color to grey
     
     if wasSpawned:
+        print("was spawned")
         translation_vector = -center  # Vector to move the object's center to the origin
     
         # Translate the object to the origin
         obj.translate(translation_vector, relative=False)
         obj.translate(np.array([0, 0.2, 0]))
+        # Add the object to the visualizer
+        vis.add_geometry(obj, reset_bounding_box=False)
+    else:
+        print("was sketched")
+        # Add the object to the visualizer
+        vis.add_geometry(obj)
     
-    # Update the object's color
-    obj.paint_uniform_color([0.5, 0.5, 0.5])  # Reset the object color to grey
-    
-    # Add the object to the visualizer
-    vis.add_geometry(obj, reset_bounding_box=False)
+
+
     
     # Add the new object to objects_dict with its properties
     objects_dict[object_id] = {
@@ -1414,7 +1415,7 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                             history["lastX"] = currentX
                             history["lastY"] = currentY
                         except Exception as e:
-                            #print(f"Error processing numerical values from command: {e}")
+                            print(f"Error processing numerical values from command: {e}")
                             pass
 
                            
@@ -1430,7 +1431,7 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
 
                             #print("current degrees ", delta * alphaR)
                         except Exception as e:
-                            #print(f"Error processing numerical values from command: {e}")
+                            print(f"Error processing numerical values from command: {e}")
                             pass
 
                     case "zoom": 
