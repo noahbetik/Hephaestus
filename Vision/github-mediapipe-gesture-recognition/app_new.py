@@ -378,7 +378,7 @@ def main():
                         print(f"\nConfidence too low: {confidence}")
                 ## ACTIVE STAGE ###############################################################
                 elif state_machine == 2:  # Active
-                    tcp_communication.send_command(f"lock-in {frame_threshold}")
+                    tcp_communication.send_command(f"lock-in 8")
 
                     gesture_changed = (
                         left_hand_gesture_id != prev_left_hand_gesture_id
@@ -449,6 +449,7 @@ def main():
                 left_hand_gesture_id = None
                 right_hand_gesture_id = None
                 frame_counter = 0
+                frame_threshold = 8
 
                 sys.stdout.write(f"\rThere is no hand in view")
                 sys.stdout.flush()

@@ -136,7 +136,19 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Button (right-aligned)
         self.action_button = QtWidgets.QPushButton('Reset', self)
-        self.action_button.setStyleSheet("font: 18pt 'Roboto';")
+        self.action_button.setStyleSheet("""
+            QPushButton {
+                font: 18pt 'Roboto';
+                color: #FFFFFF; /* White text */
+                background-color: #333333; /* Dark background */
+                border: 2px solid #505050; /* Slightly lighter border for some contrast */
+                border-radius: 10px; /* Curved borders */
+                padding: 5px; /* Add some padding for aesthetics */
+            }
+            QPushButton:hover {
+                background-color: #555555; /* Slightly lighter background on hover for visual feedback */
+            }
+        """)
         text_layout.addWidget(self.action_button, alignment=QtCore.Qt.AlignRight)
         self.action_button.clicked.connect(self.on_action_button_clicked)
 
@@ -169,10 +181,37 @@ class MainWindow(QtWidgets.QMainWindow):
     """)
 
         vertical_layout.addWidget(self.progress_bar)
+        # Add Full-Screen Toggle Button
+        self.fullscreen_button = QtWidgets.QPushButton('Full Screen', self)
+        self.fullscreen_button.setStyleSheet("""
+            QPushButton {
+                font: 18pt 'Roboto';
+                color: #FFFFFF; /* White text */
+                background-color: #333333; /* Dark background */
+                border: 2px solid #505050; /* Slightly lighter border for some contrast */
+                border-radius: 10px; /* Curved borders */
+                padding: 5px; /* Add some padding for aesthetics */
+            }
+            QPushButton:hover {
+                background-color: #555555; /* Slightly lighter background on hover for visual feedback */
+            }
+        """)
+        text_layout.addWidget(self.fullscreen_button, alignment=QtCore.Qt.AlignRight)
+        self.fullscreen_button.clicked.connect(self.toggle_full_screen)
+
+
 
     def update_progress(self, value):
         #Update the progress bar with the new value
         self.progress_bar.setValue(value)
+
+    def toggle_full_screen(self):
+        if self.isFullScreen():
+            self.showNormal()  # If the window is in full-screen mode, exit full-screen
+            self.fullscreen_button.setText('Full Screen')  # Update button text
+        else:
+            self.showFullScreen()  # Enter full-screen mode
+            self.fullscreen_button.setText('Exit Full Screen')  # Update button text
 
 
     def on_action_button_clicked(self):
