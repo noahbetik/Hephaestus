@@ -626,6 +626,7 @@ def scale_polygon_2d(polygon, scale_factor):
 
 def sketchExtrude(counters, vis):
     global ls_dict
+    global objects_dict
 
     print("SKETCH EXTRUDE!!!")
 
@@ -707,8 +708,8 @@ def sketchExtrude(counters, vis):
     vis.remove_geometry(ls)
     vis.remove_geometry(pcd)
     ls_dict = {}
-    vis.add_geometry(mesh)
-    #addGeometry(mesh)
+    #vis.add_geometry(mesh)
+    addGeometry(vis, mesh, objects_dict, "sketched", False)
 
 # ----------------------------------------------------------------------------------------
 # PARSE COMMAND
@@ -902,17 +903,19 @@ def removeGeometry(vis, obj, id):
     print("deleted object ", id)
     return
 
-def addGeometry(vis, obj, objects_dict, objType):
+def addGeometry(vis, obj, objects_dict, objType, wasSpawned):
     # Generate a unique object ID based on the current number of items in objects_dict
     object_id = f"object_{len(objects_dict) + 1}"
     
     # Compute the center of the object for translation to the origin
     center = obj.get_center()
-    translation_vector = -center  # Vector to move the object's center to the origin
     
-    # Translate the object to the origin
-    obj.translate(translation_vector, relative=False)
-    obj.translate(np.array([0, 0.2, 0]))
+    if wasSpawned:
+        translation_vector = -center  # Vector to move the object's center to the origin
+    
+        # Translate the object to the origin
+        obj.translate(translation_vector, relative=False)
+        obj.translate(np.array([0, 0.2, 0]))
     
     # Update the object's color
     obj.paint_uniform_color([0.5, 0.5, 0.5])  # Reset the object color to grey
@@ -1103,7 +1106,7 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict,
             # Create and add the cube
             new_box = o3d.geometry.TriangleMesh.create_box(width=0.2, height=0.2, depth=0.2)
             new_box.compute_vertex_normals()
-            addGeometry(vis, new_box, objects_dict, "cube")
+            addGeometry(vis, new_box, objects_dict, "cube", True)
             prevAdded = True
 
         case "sphere":
@@ -1113,7 +1116,7 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict,
             # Create and add the sphere
             new_sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.1)
             new_sphere.compute_vertex_normals()
-            addGeometry(vis, new_sphere, objects_dict, "sphere")
+            addGeometry(vis, new_sphere, objects_dict, "sphere", True)
             prevAdded = True
 
 
@@ -1146,7 +1149,7 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict,
             new_triangle = o3d.geometry.TriangleMesh(vertices=o3d.utility.Vector3dVector(vertices),
                                                     triangles=o3d.utility.Vector3iVector(triangles))
             new_triangle.compute_vertex_normals()
-            addGeometry(vis, new_triangle, objects_dict, "triangle")
+            addGeometry(vis, new_triangle, objects_dict, "triangle", True)
             prevAdded = True
 
 
