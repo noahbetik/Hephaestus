@@ -31,6 +31,9 @@ from camera_configs import faces
 # HELPER FUNCTIONS
 # ----------------------------------------------------------------------------------------
 
+
+rst_bit = 0
+
 objects_dict = {}
 ls_dict = {}
 curr_highlighted = False
@@ -43,6 +46,7 @@ zoomFactor = 0.25
 extrusion_distance = 0
 deleteCount = 0
 selected_pkt = 0
+
 
 regularColor = [0.5, 0.5, 0.5]
 closestColor = [0.0, 0.482, 1.0]
@@ -146,7 +150,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
     def on_action_button_clicked(self):
-        global objects_dict, ls_dict, snapCount, curr_highlighted, prevRotated ,prevAdded, prevSnapped , extrusion_distance, deleteCount
+        global objects_dict, ls_dict, snapCount, curr_highlighted, prevRotated ,prevAdded, prevSnapped , extrusion_distance, deleteCount, rst_bit
         # This method will be called when the button is clicked
         print("Reset button pressed!")
         curr_highlighted = False
@@ -155,6 +159,8 @@ class MainWindow(QtWidgets.QMainWindow):
         prevSnapped = False   
         extrusion_distance = 0
         deleteCount = 0
+        rst_bit = 1
+
 
         for obj in objects_dict.values():
             self.vis.remove_geometry(obj['object'], reset_bounding_box=False)
@@ -520,9 +526,17 @@ tcp_command_buffer = ""
 
 def getTCPData(sock, sketch):
     global tcp_command_buffer
-    global selected_pkt
+    global selected_pkt, rst_bit
     try:
         # Temporarily set a non-blocking mode to check for new data
+        
+        #send reset
+        if rst_bit == 1: 
+            sock.sendall("RST".encode("ascii"))
+            print("sent RST bit via TCP! rst = ", rst_bit)
+            rst_bit = 0
+
+        
         sock.setblocking(False)
         data = sock.recv(1024)  # Attempt to read more data
         packet = "ACK "+str(selected_pkt + sketch)
@@ -532,7 +546,7 @@ def getTCPData(sock, sketch):
 
             # Send acknowledgment back
             sock.sendall(packet.encode("ascii"))
-            print("send back ", packet)
+            print("sent back ", packet)
         #sock.setblocking(True)  # Revert to the original blocking mode
 
         # Decode and append to buffer
@@ -712,10 +726,7 @@ def parseCommand(
                 main_window.update_mode_text("Camera")
                 handleCam(info[1:], view_control, history, vis, main_window)
                 return ""
-            elif len(ls_dict) == 2:
-                print("wehehehehe")
 
-                sketchExtrude(counters, vis)
             elif objectHandle:
                 # if (prevRotated) : snap_to_closest_plane(vis, view_control)
                 # prevRotated = False
@@ -723,11 +734,18 @@ def parseCommand(
                 handleUpdateGeo(info[1:], history, objectHandle, vis, main_window, objects_dict, object_id, ls_dict)
                 return ""
         case "select":
-            prevAdded = False
-            deleteCount = 0
-            main_window.update_mode_text("Object")
-            selected_pkt = 1
-            return handleSelection(objects_dict, vis, main_window)  # Assume this function handles object selection
+            if len(ls_dict) == 2:
+                print("wehehehehe")
+                #force deselect in case something is selected
+                handleDeselection(objects_dict, vis, main_window)
+                
+                sketchExtrude(counters, vis)
+            else:
+                prevAdded = False
+                deleteCount = 0
+                main_window.update_mode_text("Object")
+                selected_pkt = 1
+                return handleSelection(objects_dict, vis, main_window)  # Assume this function handles object selection
         case "deselect":
             deleteCount = 0
             selected_pkt  = 0
