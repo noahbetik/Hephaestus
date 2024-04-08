@@ -384,6 +384,21 @@ def main():
                         state_machine = 3
                         print("Terminating gesture due to thumbs-down")
                         continue
+                    elif left_hand_gesture_id == 9 or right_hand_gesture_id == 9:
+                        thumbs_up_command = start_command(
+                            "select",
+                            "None",
+                            gesture_model.point_history,
+                            None,
+                            None,
+                            None,
+                            None,
+                        )
+                        print("\n")
+                        print(thumbs_up_command)
+                        tcp_communication.send_command(thumbs_up_command)
+                        state_machine = 3
+                        continue
                     gesture_active_command = active_command(
                         gesture_type, gesture_subtype, gesture_model.point_history, camera
                     )
