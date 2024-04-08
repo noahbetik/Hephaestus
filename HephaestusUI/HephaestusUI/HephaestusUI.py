@@ -616,9 +616,9 @@ def getTCPData(sock, sketch):
         
 
 
-        if data:
+        #if data:
         # Process received data
-            print(f"Received: {data.decode('ascii').strip()}")
+            #print(f"Received: {data.decode('ascii').strip()}")
 
             # Send acknowledgment back
            # sock.sendall(packet.encode("ascii"))
@@ -1249,6 +1249,17 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict,
             #print("**********SUBCOMMAND IS ",subcommand[1])
 
             if subcommand[1] == "start":
+
+                if len(ls_dict) > 0:
+                    ls_id = "ls" + str(counters["ls"] - 1)
+                    pcd_id = "pcd" + str(counters["pcd"] - 1)
+                    ls = ls_dict[ls_id]
+                    pcd = ls_dict[pcd_id]
+
+                    vis.remove_geometry(ls)
+                    vis.remove_geometry(pcd)
+                    
+                    ls_dict = {}
           
 
                 smooth_transition(vis, view_control, np.array([
@@ -1871,23 +1882,13 @@ def main():
     )
     print("Testing mesh in Open3D...")
 
-
     mesh = o3d.geometry.TriangleMesh.create_box(width=0.2, height=0.4, depth=0.2)
     mesh.compute_vertex_normals()
     
-    
-
-    
-    
     mesh.paint_uniform_color([0.5, 0.5, 0.5]) 
-
-    
-    
-    
 
     # create visualizer and window.
     vis = o3d.visualization.Visualizer()
-    
 
     vis.create_window(
         window_name="Open3D", width=width, height=height, left=50, top=50, visible=True
@@ -1899,8 +1900,6 @@ def main():
 
     # Add the grid to the visualizer
     vis.add_geometry(grid)
-
-
     
     #setup camera draw distance
     camera = vis.get_view_control()
