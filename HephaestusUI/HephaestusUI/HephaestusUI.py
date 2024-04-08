@@ -40,8 +40,6 @@ curr_highlighted = False
 prevRotated = True
 prevAdded = False
 prevSnapped = False
-previous_look_at_point = None
-zoomFactor = 0.25
 extrusion_distance = 0
 deleteCount = 0
 selected_pkt = 0
@@ -217,6 +215,7 @@ class MainWindow(QtWidgets.QMainWindow):
         global objects_dict, ls_dict, snapCount, curr_highlighted, prevRotated ,prevAdded, prevSnapped , extrusion_distance, deleteCount, rst_bit
         # This method will be called when the button is clicked
         print("Reset button pressed!")
+        self.update_dynamic_text("Welcome to Hephaestus!")
         curr_highlighted = False
         prevRotated = True
         prevAdded = False
@@ -480,9 +479,7 @@ def move_camera_v3(view_control, vals, threshold=0.01):
 
 
 
-def rotate_camera(view_control, axis, degrees=5):
-    global zoomFactor
-    
+def rotate_camera(view_control, axis, degrees=5):    
     angle = np.radians(degrees)
     if abs(angle) < 0.01:
         return
@@ -493,9 +490,6 @@ def rotate_camera(view_control, axis, degrees=5):
     angle = np.radians(degrees)
 
     if axis == "y":
-        
-        if degrees > 0:  # Assuming positive degrees tilt the view upwards
-              zoomFactor *= (1)  # Slightly decrease for "zooming out"
         rotation_matrix = np.array(
             [       
                 [np.cos(angle), 0, np.sin(angle)],
@@ -1053,7 +1047,7 @@ def addGeometry(vis, obj, objects_dict, objType, wasSpawned):
     
               
 
-def scale_object(objectHandle, delta, min_size=0.01, max_size=1.5):
+def scale_object(objectHandle, delta, min_size=0.01, max_size=2):
     # Intended scale factor based on the delta
     scaleFactor = 1 + delta
     
@@ -1226,6 +1220,7 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict,
             new_box.compute_vertex_normals()
             addGeometry(vis, new_box, objects_dict, "cube", True)
             prevAdded = True
+            main_window.update_dynamic_text("Cube added at origin")
 
         case "sphere":
             #print("Creating new sphere at origin")
@@ -1236,6 +1231,8 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict,
             new_sphere.compute_vertex_normals()
             addGeometry(vis, new_sphere, objects_dict, "sphere", True)
             prevAdded = True
+            main_window.update_dynamic_text("Sphere added at origin")
+
 
 
         case "triangle":
@@ -1269,7 +1266,7 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict,
             new_triangle.compute_vertex_normals()
             addGeometry(vis, new_triangle, objects_dict, "triangle", True)
             prevAdded = True
-
+            main_window.update_dynamic_text("Triangle added at origin")
 
         case "line":  # line handling not fully implemented yet
             main_window.update_dynamic_text("Drawing new line")
@@ -1677,7 +1674,7 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
 
                             if new_total_extrusion_x > maxLimit:
                                 #print("Maximum extrusion limit reached. No further extrusion will be performed.")
-                                main_window.update_dynamic_text("Maximum extrusion limit in x direction reached. No further extrusion will be performed.")
+                              #  main_window.update_dynamic_text("Maximum extrusion limit in x direction reached. No further extrusion will be performed.")
                                 pass
 
                             elif abs(history['last_extrusion_distance_x']) >= 0.20:##
@@ -1692,7 +1689,7 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                                 
                             if new_total_extrusion_y > maxLimit:
                                 #print("Maximum extrusion limit reached. No further extrusion will be performed.")
-                                main_window.update_dynamic_text("Maximum extrusion limit in y direction reached. No further extrusion will be performed.")
+                               #main_window.update_dynamic_text("Maximum extrusion limit in y direction reached. No further extrusion will be performed.")
                                 pass
 
 
