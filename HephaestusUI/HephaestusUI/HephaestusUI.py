@@ -611,7 +611,7 @@ def getTCPData(sock, sketch):
 
         
         sock.setblocking(False)
-        data = sock.recv(1024)  # Attempt to read more data
+        data = sock.recv(64)  # Attempt to read more data
 
         
 

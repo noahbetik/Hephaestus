@@ -177,7 +177,7 @@ def main():
             tcp_communication.rst = 0
             tcp_communication.sel = 0
             tcp_communication.desel = 1
-            print("Resetting state machine")
+            #print("Resetting state machine")
             continue
         # else:
             # print("Unknown or malformed packet:", data)S
@@ -232,7 +232,7 @@ def main():
                 if confidence > confidence_threshold:
                     num_of_hands = temp_num_of_hands
                 else:
-                    print(f"\nConfidence too low: {confidence}")
+                    #print(f"\nConfidence too low: {confidence}")
                     cv.imshow("Hand Gesture Recognition", camera.debug_image)
                     continue
 
@@ -255,13 +255,9 @@ def main():
                         single_gesture_name = gesture_list[hand_sign_id]
                         if single_gesture_name:
                             state_machine = 1
-                            print(
-                                f"\nGesture detected as single: {single_gesture_name}. Going to locking-in stage"
-                            )
-                        else:
-                            print(
-                                f"\nFor some reason, the single gesture couldn't be grabbed from the gestures list."
-                            )
+                            #print(f"\nGesture detected as single: {single_gesture_name}. Going to locking-in stage")
+                        #else:
+                            #print(f"\nFor some reason, the single gesture couldn't be grabbed from the gestures list.")
                     # Dual gesture
                     elif num_of_hands == 2:
                         # Is the dual gesture a valid gesture?
@@ -270,9 +266,7 @@ def main():
                                 (left_hand_gesture_id, right_hand_gesture_id)
                             ]
                             state_machine = 1
-                            print(
-                                f"\nGesture detected as dual: {dual_gesture_name}. Going to locking-in stage"
-                            )
+                            #print(f"\nGesture detected as dual: {dual_gesture_name}. Going to locking-in stage")
                         except:
                             print("\nNot a valid dual gesture.")
 
@@ -293,9 +287,7 @@ def main():
                             if gesture_changed or num_hands_changed:
                                 frame_counter = 0
                                 state_machine = 0
-                                print(
-                                    f"\nGESTURE_CHANGED = {gesture_changed}, num_hands_changed = {num_hands_changed}, MOVING TO NOTHING STAGE. "
-                                )
+                                #print(f"\nGESTURE_CHANGED = {gesture_changed}, num_hands_changed = {num_hands_changed}, MOVING TO NOTHING STAGE. ")
                                 continue
                         frame_counter += 1
                         tcp_communication.send_command(f"lock-in {frame_counter}")
@@ -347,8 +339,8 @@ def main():
                                 view,
                                 object,
                             )
-                            print("\n")
-                            print(gesture_start_command)
+                            #print("\n")
+                            #print(gesture_start_command)
                             tcp_communication.send_command(gesture_start_command)
                             if (
                                 gesture_types[gesture_list[right_hand_gesture_id]][
@@ -357,17 +349,17 @@ def main():
                                 == "one-hit"
                             ):
                                 state_machine = 0
-                                print("\nOne-hit, transitioning to NOTHING stage\n")
+                                #print("\nOne-hit, transitioning to NOTHING stage\n")
                             else:
                                 state_machine = 2
-                                print("\nTransitioning to ACTIVE stage\n")
+                                #print("\nTransitioning to ACTIVE stage\n")
 
                         prev_num_of_hands = num_of_hands
                         prev_left_hand_gesture_id = left_hand_gesture_id
                         prev_right_hand_gesture_id = right_hand_gesture_id
-                    else:
-                        print(f"\nConfidence too low: {confidence}")
-                        print("extrude allwed is ",extrude_allowed)
+                    #else:
+                        #print(f"\nConfidence too low: {confidence}")
+                        #print("extrude allwed is ",extrude_allowed)
                 ## ACTIVE STAGE ###############################################################
                 elif state_machine == 2:  # Active
                     tcp_communication.send_command(f"lock-in 8")
@@ -378,7 +370,7 @@ def main():
                     )
                     if left_hand_gesture_id == 5 or right_hand_gesture_id == 5:
                         state_machine = 3
-                        print("Terminating gesture due to thumbs-down")
+                        #print("Terminating gesture due to thumbs-down")
                         continue
                     elif left_hand_gesture_id == 9 or right_hand_gesture_id == 9:
                         thumbs_up_command = start_command(
@@ -390,8 +382,8 @@ def main():
                             None,
                             None,
                         )
-                        print("\n")
-                        print(thumbs_up_command)
+                        #print("\n")
+                        #print(thumbs_up_command)
                         tcp_communication.send_command(thumbs_up_command)
                         state_machine = 3
                         continue
@@ -402,7 +394,7 @@ def main():
                     # print(gesture_active_command)
                 ## END STAGE ##################################################################
                 elif state_machine == 3:  # End
-                    print("----------------------------------------------------- reached state 3")
+                    #print("----------------------------------------------------- reached state 3")
                     state_machine = 0
                     gesture_end_command = f"{gesture_type} {gesture_subtype} end"
                     tcp_communication.send_command(gesture_end_command)
