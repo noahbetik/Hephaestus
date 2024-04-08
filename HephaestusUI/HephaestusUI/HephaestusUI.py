@@ -443,7 +443,7 @@ def move_camera_v2(view_control, direction, amount=1.5):
     cam_params.extrinsic = extrinsic
     view_control.convert_from_pinhole_camera_parameters(cam_params, True)
     
-def move_camera_v3(view_control, vals, threshold=0.015):
+def move_camera_v3(view_control, vals, threshold=0.01):
     """
     Moves the camera based on the provided values, ignoring movements that are below a specified threshold.
     
@@ -610,7 +610,7 @@ def getTCPData(sock, sketch):
             curr_pkt = 0
 
         
-        sock.setblocking(False)
+        sock.setblocking(True)
         data = sock.recv(64)  # Attempt to read more data
 
         
@@ -791,6 +791,7 @@ def parseCommand(
     global deleteCount
     global prevAdded
     global selected_pkt
+    global ls_dict
     info = command.split(" ")
     #print(info)
     objectHandle = ""    
@@ -817,6 +818,7 @@ def parseCommand(
 
             elif objectHandle:
                 # if (prevRotated) : snap_to_closest_plane(vis, view_control)
+
                 # prevRotated = False
                 main_window.update_mode_text("Object")
                 handleUpdateGeo(info[1:], history, objectHandle, vis, main_window, objects_dict, object_id, ls_dict)
@@ -879,6 +881,23 @@ def parseCommand(
             if (deleteCount>5 and objectHandle):
                 removeGeometry(vis, objectHandle, object_id)
                 deleteCount = 0
+
+            if len(ls_dict) >= 2:
+                ls_id = "ls" + str(counters["ls"] - 1)
+                pcd_id = "pcd" + str(counters["pcd"] - 1)
+
+                print(f"ls_id is {ls_id}")
+
+                vis.remove_geometry(ls_dict[ls_id])
+                vis.remove_geometry(ls_dict[pcd_id])
+                ls_dict = {}
+                
+                smooth_transition(vis, view_control, np.array([
+                    [ 0.99994158, -0.00229353,  0.0105631 , -1.22174849],
+                    [-0.00238567, -0.99995914,  0.00871879,  0.39801206],
+                    [ 0.01054267, -0.00874348, -0.9999062 ,  1.79901982],  # Your comment here
+                    [ 0.        ,  0.        ,  0.        ,  1.        ]
+                ]), steps = 25)
 
         
             try:
@@ -1809,7 +1828,7 @@ def handle_commands(clientSocket, vis, view_control, camera_parameters, geometry
     try:
         #print("running")
         # Attempt to receive data, but don't block indefinitely
-        clientSocket.settimeout(0.1)  # Non-blocking with timeout
+        #clientSocket.settimeout(0.1)  # Non-blocking with timeout
         command = getTCPData(clientSocket, len(ls_dict))
 
         if command:
@@ -1926,7 +1945,7 @@ def main():
     # Setup a QTimer to periodically check for new commands
     timer = QtCore.QTimer()
     timer.timeout.connect(lambda: handle_commands(clientSocket, vis, view_control, camera_parameters, geometry_dir, history, objects_dict, counters, main_window))
-    timer.start(25)  # Check every 100 milliseconds
+    timer.start(13)  # Check every 100 milliseconds
     
 
     sys.exit(app.exec_())
