@@ -354,7 +354,7 @@ def quaternion_slerp(quat_start, quat_end, fraction):
     return interp_rot.as_quat()[0]  # Slerp returns an array of rotations
 
 
-def smooth_transition(vis, view_control, target_extrinsic, steps=100):
+def smooth_transition(vis, view_control, target_extrinsic, steps=85):
     current_extrinsic = view_control.convert_to_pinhole_camera_parameters().extrinsic
     current_translation = current_extrinsic[:3, 3]
     target_translation = target_extrinsic[:3, 3]
@@ -577,11 +577,11 @@ def getTCPData(sock, sketch):
         packet = "ACK "+str(selected_pkt + sketch)
         if data:
         # Process received data
-            print(f"Received: {data.decode('ascii').strip()}")
+            #print(f"Received: {data.decode('ascii').strip()}")
 
             # Send acknowledgment back
             sock.sendall(packet.encode("ascii"))
-            print("sent back ", packet)
+            #print("sent back ", packet)
         #sock.setblocking(True)  # Revert to the original blocking mode
 
         # Decode and append to buffer
@@ -591,7 +591,7 @@ def getTCPData(sock, sketch):
         if '\n' in tcp_command_buffer:
             command, tcp_command_buffer = tcp_command_buffer.split('\n', 1)
             command = command.strip("$")  # Strip any '$' characters as in your original processing
-            print("Received: ", command)
+           # print("Received: ", command)
             return command
     except BlockingIOError:
         # No new data available; pass this iteration
@@ -651,6 +651,7 @@ def scale_polygon_2d(polygon, scale_factor):
 
 
 def sketchExtrude(counters, vis):
+    
     global ls_dict
     global objects_dict
 
@@ -723,13 +724,16 @@ def sketchExtrude(counters, vis):
     mesh.paint_uniform_color([0.7, 0.7, 0.7])  # Light gray color
 
     mesh.compute_vertex_normals()
+    
 
     # Visualize the point cloud
     vis.remove_geometry(ls)
     vis.remove_geometry(pcd)
     ls_dict = {}
     #vis.add_geometry(mesh)
-    addGeometry(vis, mesh, objects_dict, "sketched", False)
+    addGeometry(vis, mesh, objects_dict, "sketch", False)
+
+    
 
 # ----------------------------------------------------------------------------------------
 # PARSE COMMAND
@@ -780,9 +784,17 @@ def parseCommand(
             if len(ls_dict) == 2:
                 print("wehehehehe")
                 #force deselect in case something is selected
+                camera_parameters = vis.get_view_control().convert_to_pinhole_camera_parameters()
                 handleDeselection(objects_dict, vis, main_window)
                 
                 sketchExtrude(counters, vis)
+
+                smooth_transition(vis, view_control, np.array([
+                [ 0.99994158, -0.00229353,  0.0105631 , -1.22174849],
+                [-0.00238567, -0.99995914,  0.00871879,  0.39801206],
+                [ 0.01054267, -0.00874348, -0.9999062 ,  1.79901982],  # Your comment here
+                [ 0.        ,  0.        ,  0.        ,  1.        ]
+            ]), steps = 25)
             else:
                 prevAdded = False
                 deleteCount = 0
@@ -946,7 +958,7 @@ def addGeometry(vis, obj, objects_dict, objType, wasSpawned):
     else:
         print("was sketched")
         # Add the object to the visualizer
-        vis.add_geometry(obj)
+        vis.add_geometry(obj, reset_bounding_box = False)
     
 
 
@@ -1531,15 +1543,19 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
 
                             match object_type:
                                 case "cube":
-                                    factor = 0.6
+                                    factor = 0.5
                                     maxLimit = 1.5
                                 case "sphere":
                                     factor = 0.80
                                     maxLimit = 0.4
                                     voxelFactor = 0
                                 case "triangle":
-                                    factor = 0.6  
+                                    factor = 0.5  
                                     maxLimit = 1.5
+                                case "sketch":
+                                    factor = 0.4  
+                                    maxLimit = 0.5
+                                    voxelFactor = 0.007
                                 case _:  # Default case if none of the above match
                                     factor = 1
                                     maxLimit = 1
