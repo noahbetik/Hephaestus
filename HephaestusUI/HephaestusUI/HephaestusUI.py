@@ -8,7 +8,7 @@ import sys
 from scipy.spatial.transform import Rotation as R
 from scipy.spatial.transform import Slerp
 from PySide6 import QtWidgets, QtGui, QtCore
-from PySide6.QtGui import QFont
+from PySide6.QtCore import QCoreApplication
 
 
 from camera_configs import predefined_extrinsics
@@ -40,7 +40,6 @@ curr_highlighted = False
 prevRotated = True
 prevAdded = False
 prevSnapped = False
-marker = o3d.geometry.TriangleMesh.create_sphere(radius=0.02)
 previous_look_at_point = None
 zoomFactor = 0.25
 extrusion_distance = 0
@@ -792,6 +791,7 @@ def parseCommand(
     global prevAdded
     global selected_pkt
     global ls_dict
+    global rst_bit
     info = command.split(" ")
     #print(info)
     objectHandle = ""    
@@ -826,6 +826,9 @@ def parseCommand(
                 return ""
         case "select":
             if len(ls_dict) == 2:
+                main_window.update_dynamic_text("Performing extrude operation. Please wait.")
+                QCoreApplication.processEvents()  # Force the processing of the events
+
                 #print("wehehehehe")
                 #force deselect in case something is selected
                 camera_parameters = vis.get_view_control().convert_to_pinhole_camera_parameters()
@@ -839,19 +842,24 @@ def parseCommand(
                 [ 0.01054267, -0.00874348, -0.9999062 ,  1.79901982],  # Your comment here
                 [ 0.        ,  0.        ,  0.        ,  1.        ]
             ]), steps = 25)
+                
                 #reset ML side as a precaution
                 rst_bit = 1
             else:
                 prevAdded = False
-                deleteCount = 0
+                deleteCount = 0 
                 main_window.update_mode_text("Object")
                 selected_pkt = handleSelection(objects_dict, vis, main_window)  # Assume this function handles object selection
+                history['operation'] = "select"
+
         case "deselect":
             deleteCount = 0
             selected_pkt  = 0
 
             main_window.update_mode_text("Camera")
             selected_pkt = handleDeselection(objects_dict, vis, main_window)  # Assume this function handles object selection
+            history['operation'] = "deselect"
+
         case "create":
             deleteCount = 0
             if not prevAdded:
@@ -877,8 +885,9 @@ def parseCommand(
  
             
         case "delete":
+            history['operation'] = "delete"
             deleteCount+=1
-            if (deleteCount>5 and objectHandle):
+            if (deleteCount>7 and objectHandle):
                 removeGeometry(vis, objectHandle, object_id)
                 deleteCount = 0
 
@@ -923,7 +932,13 @@ def parseCommand(
             except KeyError:
                 pass
         case "lock-in":
-            main_window.update_progress(int(info[1]))
+            
+            if history['operation'] == "delete" and objectHandle != "":
+                main_window.update_dynamic_text("Object reverted. Long hold to delete object")
+                main_window.update_progress(deleteCount*1.4)
+            elif history['operation'] == "select":
+                pass
+            else: main_window.update_progress(int(info[1])*1.75)
         case _:
             history["lastVal"] = info[1:][2]
 
@@ -1125,8 +1140,6 @@ def rotate_object(objectHandle, axis, degrees=5):
 def handleCam(subcommand, view_control, history, vis, main_window):
     
     global prevRotated
-    global marker
-
     # FORMAT:
     # start [operation] [axis] [position]
     # position n
@@ -1852,9 +1865,7 @@ def handle_commands(clientSocket, vis, view_control, camera_parameters, geometry
 # ----------------------------------------------------------------------------------------
 
 
-def main():
-    global marker
-    
+def main():    
     app = QtWidgets.QApplication(sys.argv)
     
     stylesheet = """
