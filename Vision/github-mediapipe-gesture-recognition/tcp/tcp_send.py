@@ -21,7 +21,7 @@ class TCPClient:
         if self.connection:
             try:
                 self.connection.sendall(gesture_name.encode(encoding="ascii"))
-                print(f"Sent: {gesture_name}")
+                #print(f"Sent: {gesture_name}")
             except Exception as e:
                 print(f"Failed to send data: {e}")
                 # Attempt to reconnect if sending fails

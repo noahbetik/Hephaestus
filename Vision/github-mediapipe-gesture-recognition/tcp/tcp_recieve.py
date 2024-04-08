@@ -14,7 +14,7 @@ def start_server(host="127.0.0.1", port=4445):
                     data = conn.recv(1024)
                     if not data:
                         break  # Exit the loop if client closes or data is not received
-                    print(f"Received: {data.decode()}")
+                    #print(f"Received: {data.decode()}")
                 print("Client disconnected, waiting for new connection...")
 
 

@@ -27,7 +27,7 @@ class GestureProcessing:
                 return dual_gesture
             else:
                 # If a dual gesture is detected but not recognized
-                print("Invalid gesture pair")
+                #print("Invalid gesture pair")
                 return "Invalid gesture pair"
         else:
             # If it's not a dual gesture
