@@ -172,23 +172,6 @@ def main():
                 data = tcp_communication.connection.recv(1024).decode("ascii")
                 print("********************receiving:", data.strip())
 
-
-                # if data.startswith("ACK"):
-                #     # Split the data and check the ACK value
-                #     print(data)
-                #     ack_value = data.split(" ")[1].strip()
-                #     print(f"ack_value: {ack_value}")
-                #     if ack_value == "0":
-                #         extrude_allowed = False
-                #         print("Extrude not allowed")
-                #     else:
-                #         try:
-                #             num = int(ack_value)
-                #             if num >= 1:
-                #                 extrude_allowed = True
-                #                 # print("Extrude allowed")
-                #         except ValueError:
-                #             print("Invalid ACK number:", ack_value)
                 if data.strip() == "SEL":
                     print("SELECTION RECEIVED")
                     extrude_allowed = True
