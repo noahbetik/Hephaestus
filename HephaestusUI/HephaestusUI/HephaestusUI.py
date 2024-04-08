@@ -640,8 +640,8 @@ def sketchExtrude(counters, vis):
     #ps = [[0,0,0], [1,0,0], [1.5,1,0], [1,2,0], [0,2,0], [-0.5,1,0]] # --> original sketch
     #ps2 = [[0,0,1], [1,0,1], [1.5,1,1], [1,2,1], [0,2,1], [-0.5,1,1]] # --> desired opposite prism face
 
-    scaleFactor = 4
-    stackFactor = 4
+    scaleFactor = 5
+    stackFactor = 5
     stackHeight = 0.1
     stepSize = stackHeight / stackFactor
 
@@ -667,18 +667,14 @@ def sketchExtrude(counters, vis):
 
     print("creating scaled faces")
 
+    totalScaled = []
+
     for i in range (0, scaleFactor):
         print(f"scaling faces down to {i/scaleFactor}")    
         scaled1 = scale_polygon_2d(np.array(points), i/scaleFactor)
         scaled2 = scale_polygon_2d(np.array(points2), i/scaleFactor)
-        #for p in range(len(scaled1) - 1):
-        #    scaled1 = scaled1 + linear_interpolate_3d(scaled1[p], scaled1[p+1], scaleFactor)
-        #scaled1 = scaled1 + linear_interpolate_3d(scaled1[-1], scaled1[0], scaleFactor)
-        #for p in range(len(scaled2) - 1):
-        #    scaled2 = scaled2 + linear_interpolate_3d(scaled2[p], scaled2[p+1], scaleFactor)
-        #scaled2 = scaled2 + linear_interpolate_3d(scaled2[-1], scaled2[0], scaleFactor)
         
-        totalScaled = scaled1 + scaled2
+        totalScaled = totalScaled + scaled1 + scaled2
 
     points = points + points2 + stacked + totalScaled
     pcd.points = o3d.utility.Vector3dVector(np.array(points))
@@ -697,7 +693,7 @@ def sketchExtrude(counters, vis):
 
 
     # Poisson surface reconstruction
-    '''with o3d.utility.VerbosityContextManager(o3d.utility.VerbosityLevel.Debug) as cm:
+    with o3d.utility.VerbosityContextManager(o3d.utility.VerbosityLevel.Debug) as cm:
         mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
             pcd, depth=12)
 
@@ -705,14 +701,14 @@ def sketchExtrude(counters, vis):
     # Paint the mesh to prevent it from being black
     mesh.paint_uniform_color([0.7, 0.7, 0.7])  # Light gray color
 
-    mesh.compute_vertex_normals()'''
+    mesh.compute_vertex_normals()
 
     # Visualize the point cloud
-    #vis.remove_geometry(ls)
-    #vis.remove_geometry(pcd)
+    vis.remove_geometry(ls)
+    vis.remove_geometry(pcd)
     ls_dict = {}
-    #vis.add_geometry(mesh)
-    #o3d.visualization.draw_geometries([mesh])
+    vis.add_geometry(mesh)
+    #addGeometry(mesh)
 
 # ----------------------------------------------------------------------------------------
 # PARSE COMMAND
