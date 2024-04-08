@@ -378,6 +378,8 @@ def main():
                         print(f"\nConfidence too low: {confidence}")
                 ## ACTIVE STAGE ###############################################################
                 elif state_machine == 2:  # Active
+                    tcp_communication.send_command(f"lock-in {frame_threshold}")
+
                     gesture_changed = (
                         left_hand_gesture_id != prev_left_hand_gesture_id
                         or right_hand_gesture_id != prev_right_hand_gesture_id
@@ -412,7 +414,8 @@ def main():
                     gesture_end_command = f"{gesture_type} {gesture_subtype} end"
                     tcp_communication.send_command(gesture_end_command)
                     if (frame_counter != 0):
-                        tcp_communication.send_command(f"lock-in {frame_counter}")
+                        tcp_communication.send_command(f"lock-in 0")
+
 
                 camera.draw_bounding_rect(gesture_model.brect)
                 camera.debug_image = camera.draw_landmarks(
@@ -430,8 +433,7 @@ def main():
                 )
             ## NOTHING STAGE ###################################
             else:
-                if(frame_counter > 0):
-                    tcp_communication.send_command(f"lock-in 0")
+                tcp_communication.send_command(f"lock-in 0")
 
                 if right_hand_gesture_id:
                     if state_machine != 0 and not (
