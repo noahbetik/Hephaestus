@@ -304,7 +304,7 @@ def closest_config(current_extrinsic, extrinsics=predefined_extrinsics):
             closest_match = name
             smallest_difference = difference
     
-    print(closest_match)
+    #print(closest_match)
     return closest_match
 
 def identify_plane(current_extrinsic):
@@ -324,7 +324,7 @@ def identify_plane(current_extrinsic):
     # Find the major axis that the camera is pointing along
     for axis, direction in major_axes.items():
         if np.allclose(np.dot(extr, [0, 0, -1]), direction):
-            print(f"Camera is looking along the {axis}-axis")
+            #print(f"Camera is looking along the {axis}-axis")
             return axis
 
 
@@ -340,7 +340,7 @@ def snap_to_closest_plane(vis, view_control):
     current_extrinsic = cam_params.extrinsic
 
    
-    print("************current extrisnic: ", current_extrinsic)
+    #print("************current extrisnic: ", current_extrinsic)
 
     closest_match = closest_config(current_extrinsic)
     
@@ -462,22 +462,22 @@ def move_camera_v3(view_control, vals, threshold=0.015):
     if abs(vals[0]) > threshold:
         extrinsic[0, 3] += vals[0]
         significant_movement = True
-    else:
-        print("Y-axis movement below threshold, ignoring.")
+    #else:
+        #print("Y-axis movement below threshold, ignoring.")
 
     # Check and apply movement for the z axis if it exceeds the threshold
     if abs(vals[1]) > threshold:
         extrinsic[1, 3] += vals[1]
         significant_movement = True
-    else:
-        print("Z-axis movement below threshold, ignoring.")
+    #else:
+        #print("Z-axis movement below threshold, ignoring.")
 
     # If any significant movement occurred, update the camera parameters
     if significant_movement:
         cam_params.extrinsic = extrinsic
         view_control.convert_from_pinhole_camera_parameters(cam_params, True)
-    else:
-        print("No significant movement detected.")
+    #else:
+        #print("No significant movement detected.")
 
 
 
@@ -696,12 +696,12 @@ def sketchExtrude(counters, vis):
     global ls_dict
     global objects_dict
 
-    print("SKETCH EXTRUDE!!!")
+    #print("SKETCH EXTRUDE!!!")
 
     ls_id = "ls" + str(counters["ls"] -1)
     pcd_id = "pcd" + str(counters["pcd"] -1)
 
-    print(ls_dict)
+    #print(ls_dict)
     
     ls = ls_dict[ls_id]
     pcd = ls_dict[pcd_id]
@@ -716,7 +716,7 @@ def sketchExtrude(counters, vis):
 
     points = np.asarray(pcd.points).tolist()
 
-    print("interpolating sketch")
+    #print("interpolating sketch")
 
     for p in range(len(points) - 1): # increase point density of original sketch
         points = points + linear_interpolate_3d(points[p], points[p+1], scaleFactor)
@@ -724,7 +724,7 @@ def sketchExtrude(counters, vis):
 
     stacked = []
 
-    print("creating stack")
+    #print("creating stack")
 
     for p in points:
         for i in np.arange(stepSize, 0.1, stepSize):
@@ -734,12 +734,12 @@ def sketchExtrude(counters, vis):
     
     #pcd.points.extend(o3d.utility.Vector3dVector(np.array(stacked)))
 
-    print("creating scaled faces")
+    #print("creating scaled faces")
 
     totalScaled = []
 
     for i in range (0, scaleFactor):
-        print(f"scaling faces down to {i/scaleFactor}")    
+        #print(f"scaling faces down to {i/scaleFactor}")    
         scaled1 = scale_polygon_2d(np.array(points), i/scaleFactor)
         scaled2 = scale_polygon_2d(np.array(points2), i/scaleFactor)
         
@@ -749,7 +749,7 @@ def sketchExtrude(counters, vis):
     pcd.points = o3d.utility.Vector3dVector(np.array(points))
     vis.update_geometry(pcd)
 
-    print("all points done")
+    #print("all points done")
     distances = pcd.compute_nearest_neighbor_distance()
     avg_dist = np.mean(distances)
     pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.05, max_nn=50))
@@ -792,7 +792,7 @@ def parseCommand(
     global prevAdded
     global selected_pkt
     info = command.split(" ")
-    print(info)
+    #print(info)
     objectHandle = ""    
     object_id = ""
 
@@ -824,7 +824,7 @@ def parseCommand(
                 return ""
         case "select":
             if len(ls_dict) == 2:
-                print("wehehehehe")
+                #print("wehehehehe")
                 #force deselect in case something is selected
                 camera_parameters = vis.get_view_control().convert_to_pinhole_camera_parameters()
                 handleDeselection(objects_dict, vis, main_window)
@@ -918,11 +918,11 @@ def highlight_objects_near_camera(vis, view_control, objects_dict):
 
     
     forward_vector = forward_vectors[closest_match]
-    print("forward vector is ",forward_vector)
+    #print("forward vector is ",forward_vector)
 
     
     camera_position = np.array(cam_params.extrinsic[:3, 3]) 
-    print("*************original camera position is at", camera_position)
+    #print("*************original camera position is at", camera_position)
     camera_position[0] *= forward_vector[0]
     camera_position[1] *= forward_vector[1]
     camera_position[2] *= forward_vector[2]
@@ -943,9 +943,9 @@ def highlight_objects_near_camera(vis, view_control, objects_dict):
 
         distance = np.linalg.norm(camera_position[:2] - centroid[:2])       
         
-        print("*************camera position is at", camera_position)
+        #print("*************camera position is at", camera_position)
 
-        print("**************************object centred at ",centroid)
+        #print("**************************object centred at ",centroid)
         
         if distance < closest_distance:
             closest_distance = distance
@@ -973,11 +973,11 @@ def highlight_objects_near_camera(vis, view_control, objects_dict):
 
 
 def removeGeometry(vis, obj, id):
-    print("deleting object ", id)
+    #print("deleting object ", id)
 
     vis.remove_geometry(obj, reset_bounding_box = False)
     del objects_dict[id]
-    print("deleted object ", id)
+    #print("deleted object ", id)
     return
 
 def addGeometry(vis, obj, objects_dict, objType, wasSpawned):
@@ -991,7 +991,7 @@ def addGeometry(vis, obj, objects_dict, objType, wasSpawned):
     obj.paint_uniform_color([0.5, 0.5, 0.5])  # Reset the object color to grey
     
     if wasSpawned:
-        print("was spawned")
+        #print("was spawned")
         translation_vector = -center  # Vector to move the object's center to the origin
     
         # Translate the object to the origin
@@ -1000,7 +1000,7 @@ def addGeometry(vis, obj, objects_dict, objType, wasSpawned):
         # Add the object to the visualizer
         vis.add_geometry(obj, reset_bounding_box=False)
     else:
-        print("was sketched")
+        #print("was sketched")
         # Add the object to the visualizer
         vis.add_geometry(obj, reset_bounding_box = False)
     
@@ -1032,18 +1032,18 @@ def scale_object(objectHandle, delta, min_size=0.01, max_size=1.5):
     
     # Check if any of the new extents fall below the minimum size
     if np.any(new_extents < min_size):
-        print("Adjusting scale to prevent object from getting too small.")
+        #print("Adjusting scale to prevent object from getting too small.")
         required_scale_factors_for_min = min_size / extents
         scaleFactor = max(required_scale_factors_for_min.max(), scaleFactor)
 
     # Check if any of the new extents exceed the maximum size
     elif np.any(new_extents > max_size):
-        print("Adjusting scale to prevent object from getting too large.")
+        #print("Adjusting scale to prevent object from getting too large.")
         required_scale_factors_for_max = max_size / extents
         scaleFactor = min(required_scale_factors_for_max.min(), scaleFactor)
 
     # If the final scale factor is significantly different from 1 + delta, we have made an adjustment
-    print(f"Adjusted scale factor: {scaleFactor:.2f}")
+    #print(f"Adjusted scale factor: {scaleFactor:.2f}")
     
     # Compute the object's center for uniform scaling about its center
     center = bbox.get_center()
@@ -1064,7 +1064,7 @@ def rotate_object(objectHandle, axis, degrees=5):
     
     # Define the rotation matrix for each axis
     if axis == "x":
-        print("rotating object about x")
+        #print("rotating object about x")
         rotation_matrix = np.array([
             [1, 0, 0, 0],
             [0, np.cos(angle), -np.sin(angle), 0],
@@ -1072,7 +1072,7 @@ def rotate_object(objectHandle, axis, degrees=5):
             [0, 0, 0, 1]
         ])
     elif axis == "y":
-        print("rotating object about y")
+        #print("rotating object about y")
 
         rotation_matrix = np.array([
             [np.cos(angle), 0, np.sin(angle), 0],
@@ -1125,7 +1125,7 @@ def handleCam(subcommand, view_control, history, vis, main_window):
 
     match subcommand[1]:
         case "start":
-            print("starting motion")
+            #print("starting motion")
             history["operation"] = subcommand[0] # in theory don't need to store this anymore since optype sent each update
             if history["operation"] != "rotate":
                 history["lastVal"] = subcommand[2]
@@ -1134,7 +1134,7 @@ def handleCam(subcommand, view_control, history, vis, main_window):
                 history["lastVal"] = subcommand[3]
            # print(history)
         case "end":
-            print("ending motion")
+            #print("ending motion")
             main_window.update_dynamic_text("Waiting for command...")
             history["operation"] = ""
             history["axis"] = ""
@@ -1143,7 +1143,7 @@ def handleCam(subcommand, view_control, history, vis, main_window):
         case "position":
             match history["operation"]:
                 case "pan":
-                    print("camera pan update")
+                    #print("camera pan update")
                     main_window.update_dynamic_text("Panning camera")
                     splitCoords = subcommand[2].strip("()").split(",")
                     oldCoords = history["lastVal"].strip("()").split(",")
@@ -1154,17 +1154,17 @@ def handleCam(subcommand, view_control, history, vis, main_window):
                     highlight_objects_near_camera(vis, view_control, objects_dict)
                     
                 case "rotate":
-                    print("current axis, ", history["axis"])
+                    #print("current axis, ", history["axis"])
                     main_window.update_dynamic_text("Rotating camera")
                     prevRotated = True
-                    print("camera rotate update")
+                    #print("camera rotate update")
                     delta = float(subcommand[2]) - float(history["lastVal"])
                     rotate_camera(view_control, history["axis"], degrees=delta * alphaR)
                     highlight_objects_near_camera(vis, view_control, objects_dict)
 
 
                 case "zoom":
-                    print("camera zoom update")
+                    #print("camera zoom update")
                     main_window.update_dynamic_text("Zooming camera")
                     delta = float(subcommand[2]) - float(history["lastVal"])
                     move_camera_v2(view_control, "x", delta * alphaZ)
@@ -1186,7 +1186,7 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict,
 
     match subcommand[0]:
         case "cube":
-            print("Creating new box at origin")
+            #print("Creating new box at origin")
             # Store the current view matrix
             current_view_matrix = view_control.convert_to_pinhole_camera_parameters().extrinsic
             # Create and add the cube
@@ -1196,7 +1196,7 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict,
             prevAdded = True
 
         case "sphere":
-            print("Creating new sphere at origin")
+            #print("Creating new sphere at origin")
             # Store the current view matrix
             current_view_matrix = view_control.convert_to_pinhole_camera_parameters().extrinsic
             # Create and add the sphere
@@ -1207,7 +1207,7 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict,
 
 
         case "triangle":
-            print("Creating new triangle at origin")
+            #print("Creating new triangle at origin")
             # Store the current view matrix
             current_view_matrix = view_control.convert_to_pinhole_camera_parameters().extrinsic
 
@@ -1275,31 +1275,31 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict,
                 pcd = o3d.geometry.PointCloud()
                 ls = o3d.geometry.LineSet()
 
-                print("Creating new line with endpoints ___ and ___")
+                #print("Creating new line with endpoints ___ and ___")
 
                 match view_axis: # not sure if -ve and +ve can be treated as same
                     case 'x':
-                        print("x")
+                        #print("x")
                         coords1 = [0.0] + [float(val)*alphaL for val in subcommand[2].strip("()").split(",")]
                         coords2 = [0.0] + [float(val)*alphaL for val in subcommand[3].strip("()").split(",")]
                     case '-x':
-                        print("-x")
+                        #print("-x")
                         coords1 = [0.0] + [float(val)*alphaL for val in subcommand[2].strip("()").split(",")]
                         coords2 = [0.0] + [float(val)*alphaL for val in subcommand[3].strip("()").split(",")]
                     case 'y':
-                        print("y")
+                        #print("y")
                         coords1 = [float(val)*alphaL for val in subcommand[2].strip("()").split(",")].insert(1, [0.0])
                         coords2 = [float(val)*alphaL for val in subcommand[3].strip("()").split(",")].insert(1, [0.0])
                     case '-y':
-                        print("-y")
+                        #print("-y")
                         coords1 = [float(val)*alphaL for val in subcommand[2].strip("()").split(",")].insert(1, [0.0])
                         coords2 = [float(val)*alphaL for val in subcommand[3].strip("()").split(",")].insert(1, [0.0])
                     case 'z':
-                        print("z")
+                        #print("z")
                         coords1 = [float(val)*alphaL for val in subcommand[2].strip("()").split(",")] + [0.0]
                         coords2 = [float(val)*alphaL for val in subcommand[3].strip("()").split(",")] + [0.0]
                     case '-z':
-                        print("-z")
+                        #print("-z")
                         coords1 = [float(val)*alphaL for val in subcommand[2].strip("()").split(",")] + [0.0]
                         coords2 = [float(val)*alphaL for val in subcommand[3].strip("()").split(",")] + [0.0]
 
@@ -1342,16 +1342,16 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict,
                 pcd_id = "pcd" + str(counters["pcd"] - 1)
                 ls = ls_dict[ls_id]
                 pcd = ls_dict[pcd_id]
-                print("Ending line")
+                #print("Ending line")
                 # threshold for connecting closed-loop geometry
                 all_points = np.asarray(pcd.points).tolist()
                 #print(pcd.points)
                # print(all_points)
                 if smartConnectBool(all_points[-1], all_points[0]):
-                    print("CONNECTY WECTY")
+                    #print("CONNECTY WECTY")
                     ls.lines.extend(o3d.utility.Vector2iVector(np.array([[len(pcd.points), 0]])))
-                else:
-                    print("NO CONNECTY WECTY")
+                #else:
+                    #print("NO CONNECTY WECTY")
                     
                 ls_dict[ls_id] = ls
                 ls_dict[pcd_id] = pcd
@@ -1363,34 +1363,34 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict,
                 
 
             else:
-                print("still sketching")
+                #print("still sketching")
                 ls_id = "ls" + str(counters["ls"] - 1)
                 pcd_id = "pcd" + str(counters["pcd"] - 1)
 
                 ls = ls_dict[ls_id]
                 pcd = ls_dict[pcd_id]
                 
-                print(view_axis)
+                #print(view_axis)
 
 
                 match view_axis: # not sure if -ve and +ve can be treated as same
                     case 'x':
-                        print("x")
+                        #print("x")
                         new_points = [0.0] + [float(val)*alphaL for val in subcommand[1].strip("()").split(",")]
                     case '-x':
-                        print("-x")
+                        #print("-x")
                         new_points = [0.0] + [float(val)*alphaL for val in subcommand[1].strip("()").split(",")]
                     case 'y':
-                        print("y")
+                        #print("y")
                         new_points = [float(val)*alphaL for val in subcommand[1].strip("()").split(",")].insert(1, [0.0])
                     case '-y':
-                        print("-y")
+                        #print("-y")
                         new_points = [float(val)*alphaL for val in subcommand[1].strip("()").split(",")].insert(1, [0.0])
                     case 'z':
-                        print("z")
+                        #print("z")
                         new_points = [float(val)*alphaL for val in subcommand[1].strip("()").split(",")] + [0.0]
                     case '-z':
-                        print("-z")
+                        #print("-z")
                         new_points = [float(val)*alphaL for val in subcommand[1].strip("()").split(",")] + [0.0]
                         
                 prev_points = np.asarray(ls.points).tolist() # tune number of prev elements to consider
@@ -1411,8 +1411,8 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict,
 
                     vis.update_geometry(pcd)
                     vis.update_geometry(ls)
-                else:
-                    print(f"vector distances: {vd1}, {vd2}")
+                #else:
+                    #print(f"vector distances: {vd1}, {vd2}")
                     #return
 
 def clone_mesh(mesh):
@@ -1594,7 +1594,7 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
 
                             objectHandle.paint_uniform_color(closestColor)  # Set to light blue
                             
-                            print("delta x is ",deltaX," delta y is ", deltaY)
+                            #print("delta x is ",deltaX," delta y is ", deltaY)
                             
                             
                             factor = 1  # Default factor for scaling or other operations
@@ -1620,7 +1620,7 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                                 case _:  # Default case if none of the above match
                                     factor = 1
                                     maxLimit = 1
-                            print("factor set to ", factor, " max limie set to ",maxLimit)
+                            #print("factor set to ", factor, " max limie set to ",maxLimit)
                                                     
                             extrusion_distance_x = deltaX
                             extrusion_distance_y = deltaY
@@ -1637,14 +1637,14 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                             # Calculate the new total extrusion considering this operation
                             new_total_extrusion_x = objects_dict[object_id]['total_extrusion_x'] + abs(extrusion_distance_x)
                             new_total_extrusion_y = objects_dict[object_id]['total_extrusion_y'] + abs(extrusion_distance_y)
-                            print("last extrusion x ",history['last_extrusion_distance_x'])
-                            print("last extrusion y ",history['last_extrusion_distance_y'])
+                            #print("last extrusion x ",history['last_extrusion_distance_x'])
+                            #print("last extrusion y ",history['last_extrusion_distance_y'])
                             main_window.update_dynamic_text("Extruding object")
                             
-                            print("----------------------------- total x is ",  objects_dict[object_id]['total_extrusion_x'])
+                            #print("----------------------------- total x is ",  objects_dict[object_id]['total_extrusion_x'])
 
                             if new_total_extrusion_x > maxLimit:
-                                print("Maximum extrusion limit reached. No further extrusion will be performed.")
+                                #print("Maximum extrusion limit reached. No further extrusion will be performed.")
                                 main_window.update_dynamic_text("Maximum extrusion limit in x direction reached. No further extrusion will be performed.")
                                 pass
 
@@ -1654,12 +1654,12 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                                     direction = [-1,0,0]
 
                                 objects_dict[object_id]['total_extrusion_x'] += 0.1
-                                print("extruding by 0.2 in x")
+                                #print("extruding by 0.2 in x")
 
                                 objectHandle = custom_extrude(object_id, objectHandle, direction, 0.1, vis, history, factor, voxelFactor)
                                 
                             if new_total_extrusion_y > maxLimit:
-                                print("Maximum extrusion limit reached. No further extrusion will be performed.")
+                                #print("Maximum extrusion limit reached. No further extrusion will be performed.")
                                 main_window.update_dynamic_text("Maximum extrusion limit in y direction reached. No further extrusion will be performed.")
                                 pass
 
@@ -1676,7 +1676,7 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                                 objectHandle = custom_extrude(object_id, objectHandle, direction, 0.1, vis, history, factor, voxelFactor)
 
                                 #delta = deltaY
-                            print("extrusion direction set to ", direction)
+                            #print("extrusion direction set to ", direction)
                                         
                                 
                         except Exception as e:
@@ -1729,7 +1729,7 @@ def custom_extrude(object_id, objectHandle, direction, distance, vis, history, f
     
     current_triangle_count = len(extruded_mesh.triangles)
     
-    print("--------------------------------------------------------Current triangle count ",current_triangle_count)
+    #print("--------------------------------------------------------Current triangle count ",current_triangle_count)
     # Recompute normals for the new mesh
     
     
@@ -1785,7 +1785,7 @@ def handleSelection(objects_dict, vis, main_window):
             obj = obj_info['object']  # Correctly reference the Open3D object
             obj.paint_uniform_color(selectedColor)  # Paint the object darker green
             vis.update_geometry(obj)
-            print(f"Object {object_id} selected")
+            #print(f"Object {object_id} selected")
             main_window.update_dynamic_text(f"Object selected!")
             return 1
 
@@ -1800,7 +1800,7 @@ def handleDeselection(objects_dict, vis, main_window):
             obj = obj_info['object']  # Correctly reference the Open3D object
             obj.paint_uniform_color([0.5, 0.5, 0.5])  # Reset the object color to grey
             vis.update_geometry(obj)
-            print(f"Object {object_id} deselected")
+            #print(f"Object {object_id} deselected")
             main_window.update_dynamic_text(f"Object {object_id} deselected")
             
     return 0
