@@ -1,4 +1,5 @@
 from csv import list_dialects
+from pydoc import visiblename
 import open3d as o3d
 import win32gui
 import numpy as np
@@ -46,7 +47,7 @@ zoomFactor = 0.25
 extrusion_distance = 0
 deleteCount = 0
 selected_pkt = 0
-curr_pkt = 0
+sketchExtrudeRecvd = False
 
 
 regularColor = [0.5, 0.5, 0.5]
@@ -527,7 +528,7 @@ tcp_command_buffer = ""
 
 def getTCPData(sock, sketch):
     global tcp_command_buffer
-    global selected_pkt, rst_bit, curr_pkt
+    global selected_pkt, rst_bit
     try:
         # Temporarily set a non-blocking mode to check for new data
         
@@ -536,14 +537,6 @@ def getTCPData(sock, sketch):
             sock.sendall("RST".encode("ascii"))
             print("sent RST bit via TCP! rst = ", rst_bit)
             rst_bit = 0
-        if selected_pkt == 1 and curr_pkt == 0:
-            sock.sendall("SEL".encode("ascii"))
-            print("sent SEL bit via TCP! pkt = ", selected_pkt)
-            curr_pkt = 1
-        if selected_pkt == 0 and curr_pkt == 1:
-            sock.sendall("DESEL".encode("ascii"))
-            print("sent DESEL bit via TCP!  pkt= ", selected_pkt)
-            curr_pkt = 0
 
         
         sock.setblocking(False)
@@ -770,13 +763,14 @@ def parseCommand(
                 prevAdded = False
                 deleteCount = 0
                 main_window.update_mode_text("Object")
-                selected_pkt = handleSelection(objects_dict, vis, main_window)  # Assume this function handles object selection
+                selected_pkt = 1
+                return handleSelection(objects_dict, vis, main_window)  # Assume this function handles object selection
         case "deselect":
             deleteCount = 0
             selected_pkt  = 0
 
             main_window.update_mode_text("Camera")
-            selected_pkt = handleDeselection(objects_dict, vis, main_window)  # Assume this function handles object selection
+            return handleDeselection(objects_dict, vis, main_window)  # Assume this function handles object selection
         case "create":
             deleteCount = 0
             if not prevAdded:
@@ -1680,9 +1674,9 @@ def handleSelection(objects_dict, vis, main_window):
             vis.update_geometry(obj)
             print(f"Object {object_id} selected")
             main_window.update_dynamic_text(f"Object selected!")
-            return 1
 
-    return 0
+            break  # Exit the loop once an object is marked as selected
+
 
 def handleDeselection(objects_dict, vis, main_window):
     for object_id, obj_info in objects_dict.items():
@@ -1696,7 +1690,8 @@ def handleDeselection(objects_dict, vis, main_window):
             print(f"Object {object_id} deselected")
             main_window.update_dynamic_text(f"Object {object_id} deselected")
             
-    return 0
+            break  # Exit the loop once an object is marked as deselected
+
 
 def handle_commands(clientSocket, vis, view_control, camera_parameters, geometry_dir, history, objects_dict, counters, main_window):
     try:
