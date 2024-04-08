@@ -149,6 +149,7 @@ class MainWindow(QtWidgets.QMainWindow):
         global objects_dict, ls_dict, snapCount, curr_highlighted, prevRotated ,prevAdded, prevSnapped , extrusion_distance, deleteCount
         # This method will be called when the button is clicked
         print("Reset button pressed!")
+        
         curr_highlighted = False
         prevRotated = True
         prevAdded = False
@@ -570,7 +571,6 @@ def vectorDistance(p1, p2):
     distance = ((x2 - x1) ** 2 + (y2 - y1) ** 2 + (z2 - z1) ** 2) ** 0.5
     return distance
 
-
 def linear_interpolate_3d(point1, point2, n):
     # Calculate the step size for each dimension
     step = [(point2[i] - point1[i]) / (n + 1) for i in range(3)]
@@ -601,15 +601,13 @@ def scale_polygon_2d(polygon, scale_factor):
     return scaled_polygon.tolist()
 
 
-def sketchExtrude(counters, vis):
+def sketchExtrude(counters, deltaX, deltaY, vis):
     global ls_dict
 
     print("SKETCH EXTRUDE!!!")
 
-    ls_id = "ls" + str(counters["ls"] -1)
-    pcd_id = "pcd" + str(counters["pcd"] -1)
-
-    print(ls_dict)
+    ls_id = "ls" + str(counters["ls"])
+    pcd_id = "pcd" + str(counters["pcd"])
     
     ls = ls_dict[ls_id]
     pcd = ls_dict[pcd_id]
@@ -625,12 +623,12 @@ def sketchExtrude(counters, vis):
         points = points + linear_interpolate_3d(points[p], points[p+1], scalefactor)
     points = points + linear_interpolate_3d(points[-1], points[0], scalefactor)
 
-    points2 = [[x, y, z+0.1] for x, y, z in points] # create opposite face
+    points2 = [[x, y, z+deltaX] for x, y, z in points] # create opposite face
 
     # Create a point cloud from the generated points
-    pcd.points.extend(o3d.utility.Vector3dVector(np.array(points2)))
+    pcd = o3d.geometry.PointCloud()
 
-    vis.update_geometry(pcd)
+    vis.add_geometry(pcd)
 
 
     '''stacked = []
@@ -642,8 +640,8 @@ def sketchExtrude(counters, vis):
     points = points + stacked
 
     for i in range (0, scalefactor):
-        scaled1 = scale_polygon_2d(np.array(points), i/scalefactor)
-        scaled2 = scale_polygon_2d(np.array(points2), i/scalefactor)
+        scaled1 = scale_polygon_2d(np.array(ps), i/scalefactor)
+        scaled2 = scale_polygon_2d(np.array(ps2), i/scalefactor)
         for p in range(len(scaled1) - 1):
             scaled1 = scaled1 + linear_interpolate_3d(scaled1[p], scaled1[p+1], scalefactor)
         scaled1 = scaled1 + linear_interpolate_3d(scaled1[-1], scaled1[0], scalefactor)
@@ -674,6 +672,9 @@ def sketchExtrude(counters, vis):
     # Visualize the point cloud
     o3d.visualization.draw_geometries([mesh])'''
 
+    
+
+
 # ----------------------------------------------------------------------------------------
 # PARSE COMMAND
 # ----------------------------------------------------------------------------------------
@@ -686,6 +687,7 @@ def parseCommand(
     # [command] [subcommand]
 
     global prevRotated
+    global snapCount
     global deleteCount
     global prevAdded
     global selected_pkt
@@ -705,59 +707,74 @@ def parseCommand(
 
     match info[0]:
         case "motion":
+            snapCount=0
             
             #print("**************************** ", info[1:][0])
 
             if objectHandle == "" and info[1:][0] != "extrude":
-                main_window.update_mode_text("Camera")
-                handleCam(info[1:], view_control, history, vis, main_window)
-                return ""
+                    main_window.update_mode_text("Camera")
+                    handleCam(info[1:], view_control, history, vis, main_window)
+                    return ""
             elif len(ls_dict) == 2:
                 print("wehehehehe")
+                
+                alphaE = 0.1
+                
+                coords = info[3].strip("()").split(",")
+                currentX = float(coords[0])
+                currentY = float(coords[1])
+                oldCoords = history["lastVal"].strip("()").split(",")
+                oldX = float(oldCoords[0])
+                oldY = float(oldCoords[1])
+                deltaX = (currentX - oldX) / alphaE
+                deltaY = (currentY - oldY) / alphaE
 
-                sketchExtrude(counters, vis)
+                sketchExtrude(counters, deltaX, deltaY, vis)
+                
             elif objectHandle:
                 # if (prevRotated) : snap_to_closest_plane(vis, view_control)
                 # prevRotated = False
                 main_window.update_mode_text("Object")
-                handleUpdateGeo(info[1:], history, objectHandle, vis, main_window, objects_dict, object_id, ls_dict)
+                handleUpdateGeo(info[1:], history, objectHandle, vis, main_window, objects_dict, counters, object_id)
                 return ""
         case "select":
             prevAdded = False
+            snapCount = 0
             deleteCount = 0
             main_window.update_mode_text("Object")
             selected_pkt = 1
             return handleSelection(objects_dict, vis, main_window)  # Assume this function handles object selection
         case "deselect":
+            snapCount = 0
             deleteCount = 0
             selected_pkt  = 0
 
             main_window.update_mode_text("Camera")
             return handleDeselection(objects_dict, vis, main_window)  # Assume this function handles object selection
         case "create":
+            snapCount = 0
             deleteCount = 0
             if not prevAdded:
                 handleNewGeo(info[1:], view_control, camera_parameters, vis, objects_dict, counters, main_window)
-                handleDeselection(objects_dict, vis, main_window)
                 #prevAdded = True
             return ""
         case "update":
+            snapCount = 0
             deleteCount = 0
 
 
             # if objectHandle:
             #     if (prevRotated) : snap_to_closest_plane(vis, view_control)
             #     prevRotated = False
-            handleUpdateGeo(info[1:], history, objectHandle, vis, main_window, objects_dict, object_id, ls_dict)
+            handleUpdateGeo(info[1:], history, objectHandle, vis, main_window, objects_dict, counters, object_id)
             
-
+        case "home":
+            snap_isometric(vis, view_control)
         case "snap":
-            if info[1:][0] == "iso":
+            snapCount+=1
+            if (snapCount>3):
                 snap_isometric(vis, view_control)
-            elif info[1:][0] == "home":
-                snap_to_closest_plane(vis, view_control)
- 
-            
+            else: snap_to_closest_plane(vis, view_control)
         case "delete":
             deleteCount+=1
             if (deleteCount>5 and objectHandle):
@@ -893,7 +910,7 @@ def addGeometry(vis, obj, objects_dict, objType):
     
               
 
-def scale_object(objectHandle, delta, min_size=0.01, max_size=1.5):
+def scale_object(objectHandle, delta, min_size=0.15, max_size=1.5):
     # Intended scale factor based on the delta
     scaleFactor = 1 + delta
     
@@ -950,13 +967,6 @@ def rotate_object(objectHandle, axis, degrees=5):
             [np.cos(angle), 0, np.sin(angle), 0],
             [0, 1, 0, 0],
             [-np.sin(angle), 0, np.cos(angle), 0],
-            [0, 0, 0, 1]
-        ])
-    elif axis == "z":
-        rotation_matrix = np.array([
-            [np.cos(angle), -np.sin(angle), 0, 0],
-            [np.sin(angle), np.cos(angle), 0, 0],
-            [0, 0, 1, 0],
             [0, 0, 0, 1]
         ])
     else:
@@ -1053,7 +1063,7 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict,
     global ls_dict
 
     alphaL = 0.002 # line scaling factor (maybe better way to do this)
-    print("***********subcommand[0] ", subcommand[0])
+    #print("***********subcommand[0] ", subcommand[0])
     
 
     match subcommand[0]:
@@ -1111,7 +1121,7 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict,
             prevAdded = True
 
 
-        case "line":  # line handling not fully implemented yet
+        case "line":
             main_window.update_dynamic_text("Drawing new line")
 
             # Store the current view matrix
@@ -1121,14 +1131,6 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict,
             #print("**********SUBCOMMAND IS ",subcommand[1])
 
             if subcommand[1] == "start":
-          
-
-                smooth_transition(vis, view_control, np.array([
-                [ 9.99986618e-01, -1.10921734e-03,  5.05311841e-03, -1.28562713e+00],
-                [-1.13032407e-03, -9.99990642e-01,  4.17603074e-03,  4.10222709e-01],
-                [ 5.04843899e-03, -4.18168652e-03, -9.99978513e-01,  2.46971612e+00],  # Your comment here
-                [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00,  1.00000000e+00]
-            ]))
 
                 closest_plane = predefined_extrinsics[closest_config(current_view_matrix)]
                 view_axis = identify_plane(closest_plane) # global var
@@ -1285,17 +1287,16 @@ def clone_mesh(mesh):
     # If you have other attributes like texture coordinates, you'll need to copy them as well
     return cloned_mesh
 
-def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects_dict, object_id, ls_dict):
+def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects_dict, counters, object_id):
     alphaM = 0.01  # Translation scaling factor
     alphaR = 1  # Rotation scaling factor (in radians for Open3D)
     alphaS = 100  # Scaling scaling factor
     alphaE = 100 #extrusion scaling factor
     direction = [1,0,0]
-
-    
     
     global extrusion_distance
     global prevRotated
+    global ls_dict
 
     match subcommand[1]:
         case "start":
@@ -1336,8 +1337,6 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                         main_window.update_dynamic_text("Translating object")
 
                         try:
-                   
-                            
                             coords = subcommand[2].strip("()").split(",")
                             currentX = float(coords[0])
                             currentY = float(coords[1])
@@ -1366,7 +1365,7 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                                 objects_dict[object_id]['center'] = objectHandle.get_center()
                                 if 'original' in objects_dict[object_id]:
                                     objects_dict[object_id]['original'].translate(world_space_translation, relative=True)
-      
+
                             #print("Translating object by", world_space_translation)
                             
                             history["lastX"] = currentX
@@ -1421,21 +1420,17 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                             else:
                                 #print("No object is currently selected.")
                                 pass
-                            min_size = 0.05                            
-                            scale_object(objectHandle, delta/alphaS, min_size)
-                            scale_object(objects_dict[object_id]['original'], delta/alphaS, min_size)                
+
+                            scale_object(objectHandle, delta/alphaS)       
+                            scale_object(objects_dict[object_id]['original'], delta/alphaS)                
 
                         except Exception as e:
                             print(f"Error processing numerical values from command: {e}")
                             pass
                                 
                     case "extrude":
+                        print("am in extrude")
                         try:
-                            
-                            # if object_id != "" and len(ls_dict) == 1:
-                            #     #extrude the 2d shape
-                                
-                                
                             
                             coords = subcommand[2].strip("()").split(",")
                             currentX = float(coords[0])
@@ -1448,6 +1443,13 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                             
                             deltaX = (currentX - oldX) / alphaE
                             deltaY = (currentY - oldY) / alphaE
+
+                            if (len(ls_dict) == 2): # 2 because there is 1 LS and one PCD per sketch
+                                print("wehehehehe")
+                                sketchExtrude(counters, deltaX, deltaY, vis)
+                                return
+                            else:
+                                print(f"uh oh -- size = {len(ls_dict)}")
 
                             objectHandle.paint_uniform_color(closestColor)  # Set to light blue
                             
