@@ -237,7 +237,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         ls_dict = {}
 
-        snap_isometric(self.vis, self.vis.get_view_control())
+        snap_isometric(self.vis, self.vis.get_view_control(), steps = 105)
         self.update_progress(0)
         
         
@@ -351,7 +351,7 @@ def snap_to_closest_plane(vis, view_control):
     prevSnapped = True
 
 
-def snap_isometric(vis, view_control):
+def snap_isometric(vis, view_control, steps = 85):
     global prevSnapped
     # Obtain the current extrinsic parameters
     cam_params = view_control.convert_to_pinhole_camera_parameters()
@@ -364,7 +364,7 @@ def snap_isometric(vis, view_control):
         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00,  1.00000000e+00]
     ])
         # Execute the smooth transition to the new isometric view
-    smooth_transition(vis, view_control, target_extrinsic)
+    smooth_transition(vis, view_control, target_extrinsic, steps)
     prevSnapped = False
 
 
@@ -593,30 +593,27 @@ def getTCPData(sock, sketch):
     global selected_pkt, rst_bit, curr_pkt
     try:
         # Temporarily set a non-blocking mode to check for new data
-        
+       # print("selected packet is ",selected_pkt, " and curr is ", curr_pkt)
         #send reset
         if rst_bit == 1: 
             sock.sendall("RST".encode("ascii"))
-            print("sent RST bit via TCP! rst = ", rst_bit)
+           # print("sent RST bit via TCP! rst = ", rst_bit)
             rst_bit = 0
         
-        if selected_pkt == 1 and curr_pkt == 0:
+        elif selected_pkt == 1:
             sock.sendall("SEL".encode("ascii"))
-            print("sent SEL bit via TCP! pkt = ", selected_pkt)
+           # print("sent SEL bit via TCP! pkt = ", selected_pkt)
             curr_pkt = 1
-        if selected_pkt == 0 and curr_pkt == 1:
-            sock.sendall("DESEL".encode("ascii"))
-            print("sent DESEL bit via TCP!  pkt= ", selected_pkt)
+        else:
+            sock.sendall("DES".encode("ascii"))
+          #  print("sent DES bit via TCP!  pkt= ", selected_pkt)
             curr_pkt = 0
 
         
         sock.setblocking(False)
-        
-        packet = "ACK"
-        sock.sendall(packet.encode("ascii"))
-        print("sent back ", packet)
         data = sock.recv(1024)  # Attempt to read more data
-      
+
+        
 
 
         if data:
@@ -840,6 +837,8 @@ def parseCommand(
                 [ 0.01054267, -0.00874348, -0.9999062 ,  1.79901982],  # Your comment here
                 [ 0.        ,  0.        ,  0.        ,  1.        ]
             ]), steps = 25)
+                #reset ML side as a precaution
+                rst_bit = 1
             else:
                 prevAdded = False
                 deleteCount = 0
@@ -1450,7 +1449,7 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
         case "end":
             #print("Ending motion")
             # Reset the history after operation ends
-            main_window.update_dynamic_text("Waiting for command...")
+            #main_window.update_dynamic_text("Waiting for command...")
             
             if(history["operation"] == "extrude"):   
                 objectHandle.paint_uniform_color(selectedColor) #back to selected
@@ -1595,14 +1594,14 @@ def handleUpdateGeo(subcommand, history, objectHandle, vis, main_window, objects
                             match object_type:
                                 case "cube":
                                     factor = 0.5
-                                    maxLimit = 1.5
+                                    maxLimit = 2.5
                                 case "sphere":
                                     factor = 0.80
-                                    maxLimit = 0.8
+                                    maxLimit = 2
                                     voxelFactor = 0
                                 case "triangle":
                                     factor = 0.5  
-                                    maxLimit = 1.5
+                                    maxLimit = 2
                                 case "sketch":
                                     factor = 0.4  
                                     maxLimit = 1

@@ -152,7 +152,6 @@ def main():
     view = "home"
     object = "cube"
     extrude_allowed = False
-    ack_value = None
     gesture_types = load_gesture_definitions("./tcp/gestures.json")
 
     # Initialize classes
@@ -164,14 +163,20 @@ def main():
     while True:
 
         if tcp_communication.sel:
+            #print("SET EXTRUDE TO ALLOWED")
             extrude_allowed = True
         
         elif tcp_communication.desel:
+           # print("SET EXTRUDE TO  NOT ALLOWED")
+
             extrude_allowed = False
         
         if tcp_communication.rst:
+
             state_machine = 3
             tcp_communication.rst = 0
+            tcp_communication.sel = 0
+            tcp_communication.desel = 1
             print("Resetting state machine")
             continue
         # else:
@@ -362,6 +367,7 @@ def main():
                         prev_right_hand_gesture_id = right_hand_gesture_id
                     else:
                         print(f"\nConfidence too low: {confidence}")
+                        print("extrude allwed is ",extrude_allowed)
                 ## ACTIVE STAGE ###############################################################
                 elif state_machine == 2:  # Active
                     tcp_communication.send_command(f"lock-in 8")

@@ -27,40 +27,35 @@ class TCPCommunication:
         command += "\n"
         if self.connection:
             try:
-    
-
-                # Wait for acknowledgment
-                ready = select.select([self.connection], [], [], 0.1)  # 5 second timeout
+              # Wait for acknowledgment
+                ready = select.select([self.connection], [], [], 0.1)  # Adjusted timeout for demonstration
                 if ready[0]:
                     data = self.connection.recv(1024).decode("ascii")
                     print("received ", data)
                     command_response = data.split(" ")[0].strip()
                     
-                    if command_response == "ACK":
-                        print("Acknowledgment received.")
-                        self.last_command_acknowledged = True
-                    elif command_response == "SEL":
+                    # Default to acknowledgment unless proven otherwise
+                    self.last_command_acknowledged = True
+                    
+                    if "RST" in command_response:    
+                        self.rst = 1
+                    #    print("Received RST packet.")
+                    elif "SEL" in command_response:                       
                         self.sel = 1
                         self.desel = 0
-                        self.last_command_acknowledged = True  # Assuming SEL counts as acknowledgment
-                        print("Received SEL packet.")
-                    elif command_response == "DESEL":
+                       # print("Received SEL packet.")
+                    elif "DES" in command_response:    
                         self.desel = 1
                         self.sel = 0
-                        self.last_command_acknowledged = True  # Assuming DESEL counts as acknowledgment
-                        print("Received DESEL packet.")
-                    elif command_response == "RST":
-                        self.rst = 1
-                        self.last_command_acknowledged = True  # Assuming RST counts as acknowledgment
-                        print("Received RST packet.")
+                       # print("Received DES packet.")
                     else:
+                        # Only in this case did we not receive a known response
                         self.last_command_acknowledged = False
                         print(f"Received unexpected response: {data}")
                 else:
                     print("Acknowledgment not received within timeout.")
                     self.last_command_acknowledged = False
-                    
-                    
+                        
                 if not self.last_command_acknowledged:
                     print("Last command not acknowledged. Not sending new command.")
                     return
