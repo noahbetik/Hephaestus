@@ -1205,6 +1205,7 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict,
     global view_axis
     global prevAdded
     global ls_dict
+    global rst_bit
 
     alphaL = 0.002 # line scaling factor (maybe better way to do this)
     #print("***********subcommand[0] ", subcommand[0])
@@ -1443,6 +1444,12 @@ def handleNewGeo(subcommand, view_control, camera_parameters, vis, objects_dict,
                 #else:
                     #print(f"vector distances: {vd1}, {vd2}")
                     #return
+
+                    numPoints = len(np.asarray(pcd.points).tolist())
+                    if numPoints >= 175:
+                        rst_bit = 1
+                    else:
+                        main_window.update_dynamic_text(f"Sketching object point {numPoints}/175")
 
 def clone_mesh(mesh):
     cloned_mesh = o3d.geometry.TriangleMesh()
