@@ -30,7 +30,7 @@ class TCPCommunication:
                 # ready = select.select([self.connection], [], [], 0.03)  # Adjusted timeout for demonstration
                 # if ready[0]:
                 data = self.connection.recv(1024).decode("ascii")
-                print("received ", data)
+                #print("received ", data)
                 command_response = data.split(" ")[0].strip()
                 
                 # Default to acknowledgment unless proven otherwise
@@ -53,11 +53,11 @@ class TCPCommunication:
                     print(f"Received unexpected response: {data}")
                 if self.last_command_acknowledged:
                     self.connection.sendall(command.encode("ascii"))
-                    print(f"Sent: {command.strip()}")
+                    #print(f"Sent: {command.strip()}")
                     
-                else:
-                    print("Last command not acknowledged. Not sending new command.")
-                    return
+                #else:
+                #    print("Last command not acknowledged. Not sending new command.")
+                #    return
 
             except Exception as e:
                 print(f"Failed to send data: {e}")

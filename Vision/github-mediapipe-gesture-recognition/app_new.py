@@ -268,7 +268,8 @@ def main():
                             state_machine = 1
                             #print(f"\nGesture detected as dual: {dual_gesture_name}. Going to locking-in stage")
                         except:
-                            print("\nNot a valid dual gesture.")
+                            pass
+                            #print("\nNot a valid dual gesture.")
 
                 ## LOCKING-IN STAGE ##############################################################
                 elif state_machine == 1:  # Lock-in
