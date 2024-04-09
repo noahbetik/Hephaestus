@@ -1831,6 +1831,7 @@ def handleDeselection(objects_dict, vis, main_window):
             vis.update_geometry(obj)
             #print(f"Object {object_id} deselected")
             main_window.update_dynamic_text(f"Object {object_id} deselected")
+            main_window.update_progress(0)
             
     return 0
 
