@@ -382,6 +382,8 @@ def main():
                             None,
                             None,
                         )
+                        tcp_communication.send_command(f"lock-in 0")
+
                         #print("\n")
                         #print(thumbs_up_command)
                         tcp_communication.send_command(thumbs_up_command)
