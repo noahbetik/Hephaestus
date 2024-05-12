@@ -37,7 +37,8 @@ prev_rotated = True
 prev_added = False
 
 extrusion_distance = 0
-delete_count = 0 # FOR DEREK -- not entirely sure how this works, if you can apply comments that would be great
+#counts the # of frames the user has held the 'delete' commmand
+delete_count = 0 
 
 rst_bit = 0
 selected_pkt = 0
@@ -1541,8 +1542,7 @@ def handle_update_geo(subcommand, history, object_handle, vis, main_window, obje
 
                             main_window.update_dynamic_text("Extruding object")
 
-                            if new_total_extrusion_x > maxLimit: # FOR DEREK -- why UI text notifier commented out?
-                                #main_window.update_dynamic_text("Maximum extrusion limit in x direction reached. No further extrusion will be performed.")
+                            if new_total_extrusion_x > maxLimit: #Double redundancy --theoretically shouldn't need these extra check as we check above if the object has too many triangles, but keeping it to be safe
                                 pass
 
                             elif abs(history['last_extrusion_distance_x']) >= 0.20:
@@ -1554,8 +1554,7 @@ def handle_update_geo(subcommand, history, object_handle, vis, main_window, obje
 
                                 object_handle = custom_extrude(object_id, object_handle, direction, 0.1, vis, history, factor, voxelFactor)
                                 
-                            if new_total_extrusion_y > maxLimit: # FOR DEREK -- why UI text notifier commented out?
-                                #main_window.update_dynamic_text("Maximum extrusion limit in y direction reached. No further extrusion will be performed.")
+                            if new_total_extrusion_y > maxLimit: #Double redundancy --theoretically shouldn't need these extra check as we check above if the object has too many triangles, but keeping it to be safe
                                 pass
 
 
